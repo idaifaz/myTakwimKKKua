@@ -23,6 +23,35 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
+/**
+ * API JSON untuk antara muka yang dihoskan di luar Apps Script (cth GitHub Pages).
+ * Klien hantar POST (Content-Type: text/plain) dengan badan {action, args}.
+ * Setiap tindakan tulis masih disemak token & peranan dalam fungsi api* masing-masing.
+ */
+const API_ACTIONS = {
+  getAll: apiGetAll,
+  login: apiLogin,
+  logout: apiLogout,
+  whoami: apiWhoAmI,
+  changePassword: apiChangePassword,
+  save: apiSave,
+  delete: apiDelete
+};
+
+function doPost(e) {
+  let result;
+  try {
+    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const fn = Object.prototype.hasOwnProperty.call(API_ACTIONS, body.action) ? API_ACTIONS[body.action] : null;
+    if (!fn) throw new Error('Tindakan tidak sah.');
+    const args = Array.isArray(body.args) ? body.args : [];
+    result = { ok: true, data: fn.apply(null, args) };
+  } catch (err) {
+    result = { ok: false, error: String(err && err.message || err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+}
+
 /* ===================== Setup ===================== */
 
 function setup() {

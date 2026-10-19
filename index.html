@@ -326,10 +326,32 @@ function closeModals() { $$('.modal').forEach(m => m.classList.remove('show')); 
 $$('[data-close]').forEach(b => b.addEventListener('click', closeModals));
 $$('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModals(); }));
 
+/* ================= TETAPAN =================
+   Tampal URL Web App Apps Script anda di sini (berakhir dengan /exec).
+   Kosong = Mod Demo. */
+const API_URL = 'https://script.google.com/macros/s/AKfycbw67X0D3ulITQf7mdEGYaj2bSlzvlNJrU5sgE_0lYs7bc7psVgOBtbU1hPy3porpdqV6w/exec';
+
 /* ================= Lapisan API =================
-   Dalam Google Apps Script → panggil fungsi server (google.script.run).
-   Dibuka di luar Apps Script → Mod Demo (localStorage) untuk pratonton. */
+   1. Dalam Google Apps Script → google.script.run
+   2. Di luar Apps Script (cth GitHub Pages) + API_URL diisi → fetch ke doPost
+   3. Tiada API_URL → Mod Demo (localStorage) untuk pratonton. */
 const IS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
+const USE_REMOTE = !IS_GAS && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(API_URL);
+const REMOTE_ACTION = { apiGetAll: 'getAll', apiLogin: 'login', apiLogout: 'logout', apiWhoAmI: 'whoami', apiChangePassword: 'changePassword', apiSave: 'save', apiDelete: 'delete' };
+
+async function remote(fn, ...args) {
+  let res;
+  try {
+    // text/plain mengelak CORS preflight yang tidak disokong oleh Apps Script
+    res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: REMOTE_ACTION[fn], args }), redirect: 'follow' });
+  } catch (e) {
+    throw new Error('Tidak dapat menghubungi server. Semak sambungan internet.');
+  }
+  let out;
+  try { out = await res.json(); } catch (e) { throw new Error('Respons server tidak sah. Pastikan Web App di-deploy dengan akses "Anyone".'); }
+  if (!out.ok) throw new Error(out.error || 'Ralat server.');
+  return out.data;
+}
 
 function gas(fn, ...args) {
   return new Promise((resolve, reject) => {
@@ -381,6 +403,7 @@ const Demo = (() => {
 
 function api(fn, ...args) {
   if (IS_GAS) return gas(fn, ...args);
+  if (USE_REMOTE) return remote(fn, ...args);
   return new Promise((res, rej) => setTimeout(() => { try { res(Demo[fn](...args)); } catch (e) { rej(e); } }, 120));
 }
 
@@ -655,7 +678,7 @@ $('#pwForm').addEventListener('submit', async (e) => {
 
 /* ================= Mula ================= */
 (async function init() {
-  $('#demoBanner').hidden = IS_GAS;
+  $('#demoBanner').hidden = IS_GAS || USE_REMOTE;
   setUser(null);
   if (S.token) { try { const u = await api('apiWhoAmI', S.token); if (u) { setUser(u); resetForm(); } else S.token = null; } catch (e) { S.token = null; } }
   await loadAll();
