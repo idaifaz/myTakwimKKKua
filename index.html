@@ -525,8 +525,9 @@ async function loadAll() {
 
 const years = () => {
   const ys = new Set(S.all.map(a => +a.mula.slice(0, 4)));
-  ys.add(new Date().getFullYear());
-  return [...ys].sort();
+  const cy = new Date().getFullYear();
+  ys.add(cy); ys.add(cy + 1); // tahun depan sentiasa ada untuk perancangan takwim
+  return [...ys].filter(y => y > 2000).sort((a, b) => a - b);
 };
 const units = () => [...new Set(S.all.map(a => a.unit))].sort();
 
@@ -537,7 +538,8 @@ function setOptions(sel, opts, keep) {
 }
 function fillSelectors() {
   const ys = years(); const cy = String(new Date().getFullYear());
-  const defY = ys.includes(+cy) && S.all.some(a => a.mula.startsWith(cy)) ? cy : String(ys[ys.length - 1]);
+  const dataYs = S.all.map(a => a.mula.slice(0, 4)).sort();
+  const defY = !dataYs.length || dataYs.includes(cy) ? cy : dataYs[dataYs.length - 1];
   const first = !$('#dYear').options.length;
   setOptions($('#dYear'), [['', 'Semua Tahun']].concat(ys.map(y => [y, y])), true);
   setOptions($('#dUnit'), [['', 'Semua Unit']].concat(units().map(u => [u, u])), true);
