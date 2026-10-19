@@ -44,6 +44,15 @@ Admin tidak boleh menukar peranan atau menyahaktif akaun sendiri. Ini supaya sis
 
 Alternatif: admin juga boleh tambah pengguna terus dari editor Apps Script melalui fungsi `tambahPenggunaManual()`. Selepas itu, **kosongkan semula kata laluan** dalam kod.
 
+## Notifikasi emel
+Sistem hantar emel secara automatik dalam dua keadaan:
+- **Kepada semua admin aktif** bila ada pendaftaran baharu, dengan pautan untuk lulus atau tolak.
+- **Kepada pengguna** bila akaunnya diluluskan, dengan pautan log masuk.
+
+Emel dihantar dari akaun Gmail pemilik Apps Script. Had Gmail biasa ialah lebih kurang 100 emel sehari, dan Google Workspace kolej biasanya 1,500 sehari.
+
+**Kali pertama selepas kemas kini `Code.gs`:** pilih fungsi `ujiEmel`, klik **Run**, kemudian benarkan kebenaran "Send email as you". Satu emel ujian akan masuk ke peti masuk anda. Lepas tu, deploy **New version** macam biasa.
+
 ## Akses
 - Sesiapa yang ada pautan boleh **lihat** dashboard, kalendar, cetakan dan eksport, sebab takwim bukan data peribadi.
 - **Tambah, kemas kini dan padam** memerlukan log masuk. Semakan dibuat di server Google.
