@@ -11,7 +11,8 @@ const SHEET_AKTIVITI = 'Aktiviti';
 const SHEET_USERS = 'Users';
 const AKTIVITI_HEADERS = ['ID', 'Pengisi', 'Unit', 'NamaProgram', 'TarikhMula', 'TarikhTamat',
   'PerluPeruntukan', 'KodOS', 'Amaun', 'Catatan', 'DikemasKini', 'Oleh'];
-const USER_HEADERS = ['Email', 'Nama', 'Role', 'Salt', 'Hash', 'Aktif'];
+// Aktif: 'YA' (boleh log masuk) | 'MENUNGGU' (daftar sendiri, belum diluluskan) | 'TIDAK' (dinyahaktif)
+const USER_HEADERS = ['Email', 'Nama', 'Role', 'Salt', 'Hash', 'Aktif', 'Didaftar'];
 const SESSION_TTL = 6 * 60 * 60; // 6 jam (had maksimum CacheService)
 
 /* ===================== Web app ===================== */
@@ -35,7 +36,11 @@ const API_ACTIONS = {
   whoami: apiWhoAmI,
   changePassword: apiChangePassword,
   save: apiSave,
-  delete: apiDelete
+  delete: apiDelete,
+  register: apiRegister,
+  listUsers: apiListUsers,
+  updateUser: apiUpdateUser,
+  rejectUser: apiRejectUser
 };
 
 function doPost(e) {
@@ -64,6 +69,7 @@ function setup() {
 
   let us = ss.getSheetByName(SHEET_USERS);
   if (!us) us = ss.insertSheet(SHEET_USERS);
+  if (us.getLastRow() > 0) us.getRange(1, 1, 1, USER_HEADERS.length).setValues([USER_HEADERS]); // tambah lajur baharu jika ada
   if (us.getLastRow() === 0) {
     us.appendRow(USER_HEADERS);
     const email = Session.getEffectiveUser().getEmail() || 'admin@kkkua.local';
@@ -96,23 +102,28 @@ function hashPassword_(password, salt) {
   return raw.map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
 }
 
-function addUser_(email, nama, role, password) {
+function addUser_(email, nama, role, password, status) {
   const us = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS);
   const salt = Utilities.getUuid();
   us.appendRow([String(email).toLowerCase().trim(), sanitizeForSheet_(nama), role, salt,
-    hashPassword_(password, salt), 'YA']);
+    hashPassword_(password, salt), status || 'YA', nowStr_()]);
 }
 
 function findUser_(email) {
+  email = String(email || '').toLowerCase().trim();
   const us = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS);
   const rows = us.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]).toLowerCase() === email) {
       return { row: i + 1, email: rows[i][0], nama: rows[i][1], role: String(rows[i][2]).toLowerCase(),
-        salt: rows[i][3], hash: rows[i][4], aktif: rows[i][5] === 'YA' };
+        salt: rows[i][3], hash: rows[i][4], status: String(rows[i][5]), aktif: rows[i][5] === 'YA' };
     }
   }
   return null;
+}
+
+function nowStr_() {
+  return Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
 }
 
 function checkLoginRateLimit_(identifier) {
@@ -132,6 +143,14 @@ function validateSession_(token) {
 function requireAuth_(token, roles) {
   const s = validateSession_(token);
   if (!s) throw new Error('Sesi tamat — sila log masuk semula.');
+  // Semak semula status & peranan terkini dari Sheet supaya akaun yang dinyahaktif
+  // atau ditukar peranan oleh admin berkuat kuasa serta-merta.
+  const u = findUser_(s.email);
+  if (!u || !u.aktif) {
+    CacheService.getScriptCache().remove('sess_' + token);
+    throw new Error('Sesi tamat — sila log masuk semula.');
+  }
+  s.role = u.role;
   if (roles && roles.indexOf(s.role) === -1) throw new Error('Anda tiada kebenaran untuk tindakan ini.');
   return s;
 }
@@ -147,9 +166,12 @@ function apiLogin(email, password) {
   email = String(email || '').toLowerCase().trim();
   checkLoginRateLimit_(email);
   const u = findUser_(email);
-  if (!u || !u.aktif || hashPassword_(String(password || ''), u.salt) !== u.hash) {
+  if (!u || hashPassword_(String(password || ''), u.salt) !== u.hash) {
     throw new Error('Emel atau kata laluan salah.');
   }
+  // Status hanya didedahkan selepas kata laluan betul
+  if (u.status === 'MENUNGGU') throw new Error('Akaun anda masih menunggu kelulusan admin.');
+  if (!u.aktif) throw new Error('Akaun anda tidak aktif. Sila hubungi admin.');
   CacheService.getScriptCache().remove('login_' + email);
   const token = Utilities.getUuid();
   const sess = { email: u.email, nama: u.nama, role: u.role };
@@ -163,7 +185,7 @@ function apiLogout(token) {
 }
 
 function apiWhoAmI(token) {
-  return validateSession_(token);
+  try { return requireAuth_(token); } catch (e) { return null; }
 }
 
 function apiChangePassword(token, oldPass, newPass) {
@@ -174,6 +196,86 @@ function apiChangePassword(token, oldPass, newPass) {
   const salt = Utilities.getUuid();
   const us = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS);
   us.getRange(u.row, 4, 1, 2).setValues([[salt, hashPassword_(newPass, salt)]]);
+  return true;
+}
+
+/* ===================== API: Daftar & urus pengguna ===================== */
+
+// Daftar sendiri: akaun dicipta sebagai 'staf' berstatus MENUNGGU sehingga admin meluluskan.
+function apiRegister(nama, email, password) {
+  nama = String(nama || '').trim();
+  email = String(email || '').toLowerCase().trim();
+  password = String(password || '');
+  if (nama.length < 3 || nama.length > 100) throw new Error('Sila isi nama penuh.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120) throw new Error('Format emel tidak sah.');
+  if (password.length < 8) throw new Error('Kata laluan mesti sekurang-kurangnya 8 aksara.');
+
+  // Had pendaftaran: 3 cubaan / emel / jam, dan 30 pendaftaran baharu / jam keseluruhan (elak spam)
+  const cache = CacheService.getScriptCache();
+  const kE = 'reg_' + email, kAll = 'reg_all';
+  const nE = Number(cache.get(kE) || 0), nAll = Number(cache.get(kAll) || 0);
+  if (nE >= 3 || nAll >= 30) throw new Error('Terlalu banyak pendaftaran — cuba lagi kemudian.');
+  cache.put(kE, String(nE + 1), 3600);
+  cache.put(kAll, String(nAll + 1), 3600);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    if (findUser_(email)) throw new Error('Emel ini sudah didaftarkan.');
+    addUser_(email, nama, 'staf', password, 'MENUNGGU');
+  } finally {
+    lock.releaseLock();
+  }
+  return true;
+}
+
+function apiListUsers(token) {
+  requireAuth_(token, ['admin']);
+  const rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS).getDataRange().getDisplayValues();
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (!rows[i][0]) continue;
+    // Jangan pulangkan Salt/Hash
+    out.push({ email: rows[i][0], nama: rows[i][1], role: String(rows[i][2]).toLowerCase(),
+      status: rows[i][5] || 'YA', didaftar: rows[i][6] || '' });
+  }
+  return out;
+}
+
+// changes: { role?: 'admin'|'staf', status?: 'YA'|'TIDAK' }
+function apiUpdateUser(token, email, changes) {
+  const s = requireAuth_(token, ['admin']);
+  const u = findUser_(email);
+  if (!u) throw new Error('Pengguna tidak dijumpai.');
+  changes = changes || {};
+  if (String(u.email).toLowerCase() === String(s.email).toLowerCase()) {
+    throw new Error('Anda tidak boleh menukar peranan atau status akaun sendiri.');
+  }
+  const us = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS);
+  if (changes.role !== undefined) {
+    if (['admin', 'staf'].indexOf(changes.role) === -1) throw new Error('Peranan tidak sah.');
+    us.getRange(u.row, 3).setValue(changes.role);
+  }
+  if (changes.status !== undefined) {
+    if (['YA', 'TIDAK'].indexOf(changes.status) === -1) throw new Error('Status tidak sah.');
+    us.getRange(u.row, 6).setValue(changes.status);
+  }
+  return true;
+}
+
+// Tolak permohonan yang masih MENUNGGU (padam baris). Akaun aktif perlu dinyahaktif, bukan dipadam.
+function apiRejectUser(token, email) {
+  requireAuth_(token, ['admin']);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const u = findUser_(email);
+    if (!u) throw new Error('Pengguna tidak dijumpai.');
+    if (u.status !== 'MENUNGGU') throw new Error('Hanya permohonan yang menunggu boleh ditolak.');
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS).deleteRow(u.row);
+  } finally {
+    lock.releaseLock();
+  }
   return true;
 }
 
