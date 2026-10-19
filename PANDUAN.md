@@ -30,10 +30,19 @@ Sistem takwim aktiviti Kolej Komuniti Kuantan. Ia guna Google Apps Script sebaga
 ## Bila kemas kini Code.gs
 Selepas mengubah kod di Apps Script, pergi ke **Deploy → Manage deployments**, klik ikon pensel, pilih **Version: New version**, kemudian klik **Deploy**. Dengan cara ini URL kekal sama, jadi `index.html` tak perlu diubah.
 
-## Tambah pengguna lain
-Dalam editor Apps Script, isi nilai dalam fungsi `tambahPenggunaManual()` dan jalankannya. Selepas itu, **kosongkan semula kata laluan** dalam kod.
-- `admin`: boleh tambah, kemas kini dan padam
-- `staf`: boleh tambah dan kemas kini sahaja
+## Pendaftaran pengguna
+1. Staf klik **Log Masuk → Daftar di sini**, kemudian isi nama, emel dan kata laluan.
+2. Akaun berstatus **Menunggu** dan belum boleh log masuk.
+3. Admin buka tab **Pengguna**. Nombor oren pada tab itu ialah bilangan permohonan yang menunggu. Admin klik **Lulus** atau **Tolak**.
+4. Dalam tab yang sama, admin boleh **tukar peranan** (staf/admin) dan **nyahaktif** atau **aktifkan semula** akaun. Perubahan berkuat kuasa serta-merta.
+
+Peranan:
+- `admin`: boleh tambah, kemas kini dan padam aktiviti, serta urus pengguna
+- `staf`: boleh tambah dan kemas kini aktiviti sahaja
+
+Admin tidak boleh menukar peranan atau menyahaktif akaun sendiri. Ini supaya sistem tidak terkunci tanpa admin.
+
+Alternatif: admin juga boleh tambah pengguna terus dari editor Apps Script melalui fungsi `tambahPenggunaManual()`. Selepas itu, **kosongkan semula kata laluan** dalam kod.
 
 ## Akses
 - Sesiapa yang ada pautan boleh **lihat** dashboard, kalendar, cetakan dan eksport, sebab takwim bukan data peribadi.
@@ -43,7 +52,9 @@ Dalam editor Apps Script, isi nilai dalam fungsi `tambahPenggunaManual()` dan ja
 - Kata laluan disimpan sebagai hash SHA-256 dengan salt yang berbeza bagi setiap pengguna. Tiada kata laluan teks biasa.
 - Token sesi tamat selepas 6 jam dan disemak di server pada setiap tindakan tulis.
 - Peranan (admin/staf) disemak di server, bukan di pelayar sahaja.
-- Had log masuk ialah 8 percubaan setiap 5 minit.
+- Had log masuk ialah 8 percubaan setiap 5 minit. Had pendaftaran ialah 3 setiap emel sejam, dan 30 keseluruhan sejam.
+- Pendaftaran sendiri perlu diluluskan oleh admin. Status akaun disemak semula pada setiap tindakan tulis.
+- Notis privasi ringkas dipaparkan pada borang daftar (PDPA).
 - Input dibersihkan daripada formula injection (`= + - @`) sebelum ditulis ke Sheet, dan output di-escape untuk mengelak XSS.
 - URL Web App boleh didedahkan dalam `index.html` kerana ia bukan rahsia. Keselamatan bergantung pada log masuk, bukan pada URL.
 - **Jangan** guna "Publish to Web" pada Sheet ini.
