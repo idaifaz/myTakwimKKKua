@@ -14,6 +14,7 @@ const AKTIVITI_HEADERS = ['ID', 'Pengisi', 'Unit', 'NamaProgram', 'TarikhMula', 
 // Aktif: 'YA' (boleh log masuk) | 'MENUNGGU' (daftar sendiri, belum diluluskan) | 'TIDAK' (dinyahaktif)
 const USER_HEADERS = ['Email', 'Nama', 'Role', 'Salt', 'Hash', 'Aktif', 'Didaftar'];
 const SESSION_TTL = 6 * 60 * 60; // 6 jam (had maksimum CacheService)
+const APP_URL = 'https://idaifaz.github.io/myTakwimKKKua/'; // pautan dalam emel notifikasi
 
 /* ===================== Web app ===================== */
 
@@ -226,6 +227,7 @@ function apiRegister(nama, email, password) {
   } finally {
     lock.releaseLock();
   }
+  notifyAdminsNewRegistration_(nama, email);
   return true;
 }
 
@@ -259,6 +261,7 @@ function apiUpdateUser(token, email, changes) {
   if (changes.status !== undefined) {
     if (['YA', 'TIDAK'].indexOf(changes.status) === -1) throw new Error('Status tidak sah.');
     us.getRange(u.row, 6).setValue(changes.status);
+    if (changes.status === 'YA' && u.status === 'MENUNGGU') notifyUserApproved_(u.nama, u.email);
   }
   return true;
 }
@@ -359,4 +362,70 @@ function findRow_(sh, id) {
   const ids = sh.getRange(1, 1, sh.getLastRow(), 1).getDisplayValues();
   for (let i = 1; i < ids.length; i++) if (ids[i][0] === String(id)) return i + 1;
   return 0;
+}
+
+/* ===================== Notifikasi emel ===================== */
+// Emel dihantar dari akaun Gmail pemilik skrip (Web App "Execute as: Me").
+// Teks biasa sahaja — elak suntikan HTML. Kegagalan emel tidak menggagalkan tindakan utama.
+
+function cleanText_(s) {
+  return String(s == null ? '' : s).replace(/^'/, '').replace(/[\r\n]+/g, ' ').trim().slice(0, 100);
+}
+
+function sendMail_(to, subject, body) {
+  try {
+    if (!to || MailApp.getRemainingDailyQuota() < 1) {
+      console.warn('Emel tidak dihantar (tiada penerima atau kuota habis): ' + subject);
+      return false;
+    }
+    MailApp.sendEmail({ to: to, subject: subject, body: body, name: 'myTakwimKKKua' });
+    return true;
+  } catch (err) {
+    console.error('Gagal hantar emel: ' + err);
+    return false;
+  }
+}
+
+function activeAdminEmails_() {
+  const rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS).getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][2]).toLowerCase() === 'admin' && rows[i][5] === 'YA' && rows[i][0]) out.push(String(rows[i][0]));
+  }
+  return out;
+}
+
+function notifyAdminsNewRegistration_(nama, email) {
+  const admins = activeAdminEmails_();
+  if (!admins.length) return;
+  nama = cleanText_(nama);
+  sendMail_(admins.join(','), '[myTakwimKKKua] Pendaftaran baharu: ' + nama,
+    'Assalamualaikum dan salam sejahtera,\n\n' +
+    'Terdapat pendaftaran pengguna baharu yang menunggu kelulusan:\n\n' +
+    '  Nama  : ' + nama + '\n' +
+    '  Emel  : ' + cleanText_(email) + '\n' +
+    '  Tarikh: ' + nowStr_() + '\n\n' +
+    'Sila log masuk sebagai admin dan buka tab "Pengguna" untuk lulus atau tolak:\n' +
+    APP_URL + '\n\n' +
+    'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.');
+}
+
+function notifyUserApproved_(nama, email) {
+  sendMail_(String(email), '[myTakwimKKKua] Akaun anda telah diluluskan',
+    'Assalamualaikum dan salam sejahtera ' + cleanText_(nama) + ',\n\n' +
+    'Akaun myTakwimKKKua anda telah diluluskan oleh admin. Anda kini boleh log masuk menggunakan emel dan kata laluan yang didaftarkan:\n\n' +
+    APP_URL + '\n\n' +
+    'Jika anda tidak membuat pendaftaran ini, sila abaikan emel ini atau hubungi admin sistem.\n\n' +
+    'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.');
+}
+
+/**
+ * Jalankan SEKALI dari editor selepas kemas kini kod ini, untuk memberi kebenaran
+ * menghantar emel. Ia menghantar satu emel ujian ke akaun anda sendiri.
+ */
+function ujiEmel() {
+  const me = Session.getEffectiveUser().getEmail();
+  const ok = sendMail_(me, '[myTakwimKKKua] Ujian notifikasi emel',
+    'Notifikasi emel myTakwimKKKua berfungsi.\nBaki kuota emel hari ini: ' + MailApp.getRemainingDailyQuota());
+  Logger.log(ok ? 'Emel ujian dihantar ke ' + me : 'Emel ujian GAGAL — semak log.');
 }
