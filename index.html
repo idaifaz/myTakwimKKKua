@@ -18,6 +18,7 @@
     --radius: 14px; --shadow: 0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; }
   body { font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
   button, input, select, textarea { font: inherit; color: inherit; }
@@ -81,6 +82,14 @@
   .ib.e { background: #dbeafe; color: var(--blue); }
   .ib.d { background: #fee2e2; color: var(--red); }
   .ib svg.i { width: 16px; height: 16px; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .pill.YA { background: #dcfce7; color: #166534; }
+  .pill.MENUNGGU { background: #fef3c7; color: #92400e; }
+  .pill.TIDAK { background: #f1f5f9; color: var(--muted); }
+  .tab .badge { background: var(--orange); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 7px; margin-left: 2px; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+  .btn.red { background: var(--red); }
+  .notice { font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; line-height: 1.5; }
   .link { color: var(--teal); background: none; border: 0; cursor: pointer; font-weight: 600; font-size: 13px; }
   .empty { text-align: center; color: var(--muted); padding: 24px; }
 
@@ -174,9 +183,10 @@
     <button class="tab" data-p="kalendar"><svg class="i"><use href="#i-cal"/></svg>Kalendar Tahunan</button>
     <button class="tab" data-p="cetak"><svg class="i"><use href="#i-print"/></svg>Cetak Bulanan</button>
     <button class="tab" data-p="laporan"><svg class="i"><use href="#i-file"/></svg>Laporan &amp; Eksport</button>
+    <button class="tab" data-p="pengguna" id="tabPengguna" hidden><svg class="i"><use href="#i-users"/></svg>Pengguna<span class="badge" id="pendingBadge" hidden></span></button>
   </nav>
 </header>
-<div class="demo-banner" id="demoBanner" hidden>Mod Demo — data disimpan dalam pelayar ini sahaja. Log masuk demo: <b>admin@demo</b> / <b>demo1234</b></div>
+<div class="demo-banner" id="demoBanner" hidden>Mod Demo — data disimpan dalam pelayar ini sahaja. Log masuk demo: <b>admin@demo</b> atau <b>staf1@demo</b> / <b>demo1234</b></div>
 <div class="subbar"><div class="subbar-in">
   <span>myTakwimKKKua</span>
   <button class="userbtn" id="userBtn"><span id="userLabel">Log Masuk</span><span class="avatar"><svg class="i"><use href="#i-user"/></svg></span></button>
@@ -268,6 +278,19 @@
       <button class="btn green" id="btnExport" style="width:100%"><svg class="i"><use href="#i-down"/></svg>Muat Turun Excel</button>
     </div>
   </section>
+
+  <!-- PENGGUNA (admin sahaja) -->
+  <section class="page" id="page-pengguna">
+    <div class="page-h"><h2>Urus Pengguna</h2><p>Luluskan pendaftaran baharu, tukar peranan atau nyahaktif akaun</p></div>
+    <div class="card">
+      <div class="filters">
+        <div class="fld" style="flex:2 1 200px"><input id="uSearch" placeholder="Cari nama atau emel..."></div>
+        <div class="fld"><select id="uStatus"><option value="">Semua Status</option><option value="MENUNGGU">Menunggu</option><option value="YA">Aktif</option><option value="TIDAK">Tidak Aktif</option></select></div>
+        <button class="btn sq" id="btnUsersRefresh" title="Muat semula"><svg class="i"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Nama</th><th>Emel</th><th>Peranan</th><th>Status</th><th>Didaftar</th><th>Tindakan</th></tr></thead><tbody id="usersBody"></tbody></table></div>
+    </div>
+  </section>
 </main>
 
 <!-- Login modal -->
@@ -278,6 +301,21 @@
     <div class="row"><label for="lgPass">Kata Laluan</label><input id="lgPass" type="password" autocomplete="current-password" required></div>
     <div class="form-actions"><button class="btn" type="submit">Log Masuk</button><button class="btn ghost" type="button" data-close>Batal</button></div>
   </form>
+  <p class="hint" style="margin:14px 0 0">Belum ada akaun? <button class="link" type="button" id="btnToRegister">Daftar di sini</button></p>
+</div></div>
+
+<!-- Register modal -->
+<div class="modal" id="mRegister"><div class="box">
+  <h3>Daftar Akaun</h3>
+  <div class="notice">Nama dan emel anda dikumpul untuk tujuan akses sistem myTakwimKKKua sahaja, dan hanya boleh dilihat oleh admin sistem. Akaun anda akan aktif selepas diluluskan oleh admin.</div>
+  <form id="regForm">
+    <div class="row"><label for="rgNama">Nama penuh</label><input id="rgNama" maxlength="100" autocomplete="name" required></div>
+    <div class="row"><label for="rgEmail">Emel</label><input id="rgEmail" type="email" maxlength="120" autocomplete="email" required></div>
+    <div class="row"><label for="rgPass">Kata laluan (min 8 aksara)</label><input id="rgPass" type="password" minlength="8" autocomplete="new-password" required></div>
+    <div class="row"><label for="rgPass2">Sahkan kata laluan</label><input id="rgPass2" type="password" minlength="8" autocomplete="new-password" required></div>
+    <div class="form-actions"><button class="btn" type="submit">Hantar Pendaftaran</button><button class="btn ghost" type="button" data-close>Batal</button></div>
+  </form>
+  <p class="hint" style="margin:14px 0 0">Sudah ada akaun? <button class="link" type="button" id="btnToLogin">Log masuk</button></p>
 </div></div>
 
 <!-- Account modal -->
@@ -337,7 +375,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbw67X0D3ulITQf7mdEGYaj2
    3. Tiada API_URL → Mod Demo (localStorage) untuk pratonton. */
 const IS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
 const USE_REMOTE = !IS_GAS && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(API_URL);
-const REMOTE_ACTION = { apiGetAll: 'getAll', apiLogin: 'login', apiLogout: 'logout', apiWhoAmI: 'whoami', apiChangePassword: 'changePassword', apiSave: 'save', apiDelete: 'delete' };
+const REMOTE_ACTION = { apiGetAll: 'getAll', apiLogin: 'login', apiLogout: 'logout', apiWhoAmI: 'whoami', apiChangePassword: 'changePassword', apiSave: 'save', apiDelete: 'delete', apiRegister: 'register', apiListUsers: 'listUsers', apiUpdateUser: 'updateUser', apiRejectUser: 'rejectUser' };
 
 async function remote(fn, ...args) {
   let res;
@@ -376,17 +414,56 @@ const Demo = (() => {
   let data = load();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} };
   const sessions = {};
-  const need = (t) => { if (!sessions[t]) throw new Error('Sesi tamat — sila log masuk semula.'); return sessions[t]; };
+  // Pengguna demo (kata laluan disimpan terus kerana ini data olok-olok dalam pelayar sahaja)
+  const users = [
+    { email: 'admin@demo', nama: 'Pentadbir Demo', role: 'admin', status: 'YA', pass: 'demo1234', didaftar: '2026-01-01 08:00' },
+    { email: 'staf1@demo', nama: 'Aminah binti Ali', role: 'staf', status: 'YA', pass: 'demo1234', didaftar: '2026-01-05 10:12' },
+    { email: 'baharu@demo', nama: 'Rahman bin Yusof', role: 'staf', status: 'MENUNGGU', pass: 'demo1234', didaftar: '2026-10-18 15:40' }
+  ];
+  const findU = (e) => users.find(u => u.email === String(e || '').toLowerCase().trim());
+  const need = (t, roles) => {
+    const s = sessions[t]; const u = s && findU(s.email);
+    if (!u || u.status !== 'YA') throw new Error('Sesi tamat — sila log masuk semula.');
+    if (roles && !roles.includes(u.role)) throw new Error('Anda tiada kebenaran untuk tindakan ini.');
+    return { email: u.email, nama: u.nama, role: u.role };
+  };
   const now = () => { const d = new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes()); };
   return {
     apiGetAll: () => data.slice(),
     apiLogin: (email, pass) => {
-      if (String(email).trim().toLowerCase() !== 'admin@demo' || pass !== 'demo1234') throw new Error('Emel atau kata laluan salah.');
-      const token = Math.random().toString(36).slice(2); const user = { email: 'admin@demo', nama: 'Pentadbir Demo', role: 'admin' };
-      sessions[token] = user; return { token, user };
+      const u = findU(email);
+      if (!u || u.pass !== pass) throw new Error('Emel atau kata laluan salah.');
+      if (u.status === 'MENUNGGU') throw new Error('Akaun anda masih menunggu kelulusan admin.');
+      if (u.status !== 'YA') throw new Error('Akaun anda tidak aktif. Sila hubungi admin.');
+      const token = Math.random().toString(36).slice(2); sessions[token] = { email: u.email };
+      return { token, user: need(token) };
     },
     apiLogout: (t) => { delete sessions[t]; return true; },
-    apiWhoAmI: (t) => sessions[t] || null,
+    apiWhoAmI: (t) => { try { return need(t); } catch (e) { return null; } },
+    apiRegister: (nama, email, pass) => {
+      email = String(email || '').toLowerCase().trim();
+      if (String(nama || '').trim().length < 3) throw new Error('Sila isi nama penuh.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Format emel tidak sah.');
+      if (String(pass || '').length < 8) throw new Error('Kata laluan mesti sekurang-kurangnya 8 aksara.');
+      if (findU(email)) throw new Error('Emel ini sudah didaftarkan.');
+      users.push({ email, nama: nama.trim(), role: 'staf', status: 'MENUNGGU', pass, didaftar: now() });
+      return true;
+    },
+    apiListUsers: (t) => { need(t, ['admin']); return users.map(({ pass, ...u }) => ({ ...u })); },
+    apiUpdateUser: (t, email, ch) => {
+      const s = need(t, ['admin']); const u = findU(email);
+      if (!u) throw new Error('Pengguna tidak dijumpai.');
+      if (u.email === s.email) throw new Error('Anda tidak boleh menukar peranan atau status akaun sendiri.');
+      if (ch.role !== undefined) u.role = ch.role;
+      if (ch.status !== undefined) u.status = ch.status;
+      return true;
+    },
+    apiRejectUser: (t, email) => {
+      need(t, ['admin']); const i = users.findIndex(u => u.email === email);
+      if (i < 0) throw new Error('Pengguna tidak dijumpai.');
+      if (users[i].status !== 'MENUNGGU') throw new Error('Hanya permohonan yang menunggu boleh ditolak.');
+      users.splice(i, 1); return true;
+    },
     apiChangePassword: () => { throw new Error('Tidak disokong dalam mod demo.'); },
     apiSave: (t, a) => {
       need(t);
@@ -397,7 +474,7 @@ const Demo = (() => {
       else { rec.id = 'D' + Date.now().toString(36); data.push(rec); }
       save(); return rec.id;
     },
-    apiDelete: (t, id) => { const s = need(t); if (s.role !== 'admin') throw new Error('Anda tiada kebenaran.'); data = data.filter(x => x.id !== id); save(); return true; }
+    apiDelete: (t, id) => { need(t, ['admin']); data = data.filter(x => x.id !== id); save(); return true; }
   };
 })();
 
@@ -416,6 +493,10 @@ function setUser(u) {
   $('#userLabel').textContent = u ? u.nama || u.email : 'Log Masuk';
   $('#needLogin').hidden = !!u;
   $('#actForm').hidden = !u;
+  const isAdmin = !!(u && u.role === 'admin');
+  $('#tabPengguna').hidden = !isAdmin;
+  if (!isAdmin) { S.users = []; $('#pendingBadge').hidden = true; if ($('#page-pengguna').classList.contains('active')) go('dashboard'); }
+  else loadUsers();
   renderList();
 }
 
@@ -645,6 +726,74 @@ $('#btnExport').addEventListener('click', () => {
   }
   XLSX.writeFile(wb, 'Draf_Takwim_KKKua_' + y + '.xlsx');
   toast('Fail Excel dijana.');
+});
+
+/* ================= Urus pengguna (admin) ================= */
+const STATUS_LBL = { YA: 'Aktif', MENUNGGU: 'Menunggu', TIDAK: 'Tidak Aktif' };
+async function loadUsers() {
+  if (!S.user || S.user.role !== 'admin') return;
+  try { S.users = await api('apiListUsers', S.token); renderUsers(); }
+  catch (err) { handleErr(err); }
+}
+function renderUsers() {
+  const users = S.users || [];
+  const pending = users.filter(u => u.status === 'MENUNGGU').length;
+  $('#pendingBadge').textContent = pending; $('#pendingBadge').hidden = !pending;
+  const q = $('#uSearch').value.trim().toLowerCase(), st = $('#uStatus').value;
+  const order = { MENUNGGU: 0, YA: 1, TIDAK: 2 };
+  const rows = users.filter(u => (!st || u.status === st) && (!q || u.nama.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)))
+    .sort((a, b) => (order[a.status] - order[b.status]) || a.nama.localeCompare(b.nama));
+  const me = S.user && S.user.email;
+  $('#usersBody').innerHTML = rows.length ? rows.map(u => {
+    const self = u.email === me, e = esc(u.email);
+    let acts = '';
+    if (self) acts = '<span class="hint">Akaun anda</span>';
+    else if (u.status === 'MENUNGGU') acts = '<button class="btn sm" data-ua="approve" data-e="' + e + '">Lulus</button> <button class="btn sm red" data-ua="reject" data-e="' + e + '">Tolak</button>';
+    else if (u.status === 'YA') acts = '<button class="btn sm ghost" data-ua="disable" data-e="' + e + '">Nyahaktif</button>';
+    else acts = '<button class="btn sm ghost" data-ua="enable" data-e="' + e + '">Aktifkan</button>';
+    const roleSel = self ? esc(u.role) : '<select data-role="' + e + '" style="padding:6px 8px;min-width:90px">' +
+      ['staf', 'admin'].map(r => '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>';
+    return '<tr><td><b>' + esc(u.nama) + '</b></td><td>' + e + '</td><td>' + roleSel + '</td><td><span class="pill ' + esc(u.status) + '">' + esc(STATUS_LBL[u.status] || u.status) + '</span></td><td style="white-space:nowrap">' + esc(u.didaftar) + '</td><td><div class="acts" style="flex-wrap:wrap">' + acts + '</div></td></tr>';
+  }).join('') : '<tr><td colspan="6" class="empty">Tiada pengguna.</td></tr>';
+}
+async function userAction(fn, args, msg) {
+  busy(true);
+  try { await api(fn, S.token, ...args); toast(msg); await loadUsers(); }
+  catch (err) { handleErr(err); renderUsers(); }
+  busy(false);
+}
+$('#usersBody').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ua]'); if (!b) return;
+  const u = (S.users || []).find(x => x.email === b.dataset.e); if (!u) return;
+  const a = b.dataset.ua;
+  if (a === 'approve') userAction('apiUpdateUser', [u.email, { status: 'YA' }], u.nama + ' diluluskan.');
+  if (a === 'reject' && confirm('Tolak permohonan ' + u.nama + '? Rekod akan dipadam.')) userAction('apiRejectUser', [u.email], 'Permohonan ditolak.');
+  if (a === 'disable' && confirm('Nyahaktif akaun ' + u.nama + '? Pengguna ini tidak akan dapat log masuk.')) userAction('apiUpdateUser', [u.email, { status: 'TIDAK' }], 'Akaun dinyahaktif.');
+  if (a === 'enable') userAction('apiUpdateUser', [u.email, { status: 'YA' }], 'Akaun diaktifkan semula.');
+});
+$('#usersBody').addEventListener('change', (e) => {
+  const s = e.target.closest('[data-role]'); if (!s) return;
+  const u = (S.users || []).find(x => x.email === s.dataset.role); if (!u) return;
+  if (!confirm('Tukar peranan ' + u.nama + ' kepada "' + s.value + '"?')) { s.value = u.role; return; }
+  userAction('apiUpdateUser', [u.email, { role: s.value }], 'Peranan dikemas kini.');
+});
+$('#uSearch').addEventListener('input', renderUsers);
+$('#uStatus').addEventListener('change', renderUsers);
+$('#btnUsersRefresh').addEventListener('click', () => { busy(true); loadUsers().finally(() => busy(false)); });
+
+/* ================= Daftar ================= */
+$('#btnToRegister').addEventListener('click', () => { closeModals(); $('#regForm').reset(); openModal('#mRegister'); });
+$('#btnToLogin').addEventListener('click', () => { closeModals(); openModal('#mLogin'); });
+$('#regForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if ($('#rgPass').value !== $('#rgPass2').value) return toast('Kata laluan tidak sepadan.', true);
+  busy(true);
+  try {
+    await api('apiRegister', $('#rgNama').value.trim(), $('#rgEmail').value.trim(), $('#rgPass').value);
+    closeModals(); $('#regForm').reset();
+    toast('Pendaftaran diterima. Sila tunggu kelulusan admin.');
+  } catch (err) { toast(err.message, true); }
+  busy(false);
 });
 
 /* ================= Log masuk ================= */
