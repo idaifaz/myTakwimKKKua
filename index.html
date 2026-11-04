@@ -632,7 +632,8 @@ const FP = {};
   if (typeof flatpickr === 'undefined') { $(id).type = 'date'; return; } // CDN gagal → kembali ke input asli
   FP[id] = flatpickr($(id), {
     dateFormat: 'Y-m-d', altInput: true, altFormat: 'd/m/Y', allowInput: true, disableMobile: true,
-    locale: (flatpickr.l10ns && flatpickr.l10ns.ms) || 'default'
+    // fail l10n/ms flatpickr tidak daftar diri dalam flatpickr.l10ns; ia dedahkan window.ms.Malaysian
+    locale: (window.ms && window.ms.Malaysian) || (flatpickr.l10ns && flatpickr.l10ns.ms) || 'default'
   });
   FP[id].altInput.placeholder = 'dd/mm/yyyy';
 });
