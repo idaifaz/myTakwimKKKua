@@ -41,7 +41,8 @@ const API_ACTIONS = {
   register: apiRegister,
   listUsers: apiListUsers,
   updateUser: apiUpdateUser,
-  rejectUser: apiRejectUser
+  rejectUser: apiRejectUser,
+  resetPassword: apiResetPassword
 };
 
 function doPost(e) {
@@ -83,8 +84,9 @@ function setup() {
 }
 
 /**
- * Tambah pengguna dari editor: ubah nilai di bawah, jalankan, kemudian
- * KOSONGKAN semula nilai kata laluan supaya tak tertinggal dalam kod.
+ * Tambah pengguna (atau reset kata laluan pengguna sedia ada) dari editor:
+ * ubah nilai di bawah, jalankan, kemudian KOSONGKAN semula nilai kata laluan
+ * supaya tak tertinggal dalam kod.
  */
 function tambahPenggunaManual() {
   const email = '';      // cth: 'staf@kkkua.edu.my'
@@ -92,6 +94,14 @@ function tambahPenggunaManual() {
   const role = 'admin';  // 'admin' atau 'staf'
   const password = '';
   if (!email || !password) throw new Error('Isi email & password dahulu.');
+  const u = findUser_(email);
+  if (u) {
+    // Emel sudah wujud: kemas kini baris sedia ada (bukan tambah baris baharu,
+    // kerana findUser_ hanya membaca padanan pertama).
+    setPassword_(u.row, password);
+    Logger.log('Pengguna %s sudah wujud — kata laluan dikemas kini.', email);
+    return;
+  }
   addUser_(email, nama, role, password);
   Logger.log('Pengguna %s ditambah.', email);
 }
@@ -108,6 +118,22 @@ function addUser_(email, nama, role, password, status) {
   const salt = Utilities.getUuid();
   us.appendRow([String(email).toLowerCase().trim(), sanitizeForSheet_(nama), role, salt,
     hashPassword_(password, salt), status || 'YA', nowStr_()]);
+}
+
+// Tetapkan kata laluan baharu (salt baharu) pada baris pengguna di Sheet
+function setPassword_(row, password) {
+  const salt = Utilities.getUuid();
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS)
+    .getRange(row, 4, 1, 2).setValues([[salt, hashPassword_(password, salt)]]);
+}
+
+// Kata laluan sementara 10 aksara (tanpa huruf/nombor yang mudah keliru: 0 O 1 l I)
+function tempPassword_() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + Date.now());
+  let out = '';
+  for (let i = 0; i < 10; i++) out += chars[((bytes[i] + 256) % 256) % chars.length];
+  return out;
 }
 
 function findUser_(email) {
@@ -194,9 +220,7 @@ function apiChangePassword(token, oldPass, newPass) {
   if (String(newPass || '').length < 8) throw new Error('Kata laluan baharu mesti sekurang-kurangnya 8 aksara.');
   const u = findUser_(s.email);
   if (!u || hashPassword_(String(oldPass || ''), u.salt) !== u.hash) throw new Error('Kata laluan lama salah.');
-  const salt = Utilities.getUuid();
-  const us = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS);
-  us.getRange(u.row, 4, 1, 2).setValues([[salt, hashPassword_(newPass, salt)]]);
+  setPassword_(u.row, newPass);
   return true;
 }
 
@@ -282,11 +306,37 @@ function apiRejectUser(token, email) {
   return true;
 }
 
+// Admin reset kata laluan pengguna lain. Kata laluan sementara dihantar ke emel pengguna.
+// Jika emel gagal (cth kuota habis), kata laluan sementara dipulangkan kepada admin
+// supaya boleh disampaikan secara manual.
+function apiResetPassword(token, email) {
+  const s = requireAuth_(token, ['admin']);
+  const u = findUser_(email);
+  if (!u) throw new Error('Pengguna tidak dijumpai.');
+  if (String(u.email).toLowerCase() === String(s.email).toLowerCase()) {
+    throw new Error('Guna "Tukar Kata Laluan" untuk akaun sendiri.');
+  }
+  if (u.status === 'MENUNGGU') throw new Error('Luluskan permohonan dahulu sebelum reset kata laluan.');
+  const temp = tempPassword_();
+  setPassword_(u.row, temp);
+  const emailed = sendMail_(String(u.email), '[myTakwimKKKua] Kata laluan anda telah di-reset',
+    'Assalamualaikum dan salam sejahtera ' + cleanText_(u.nama) + ',\n\n' +
+    'Admin sistem telah me-reset kata laluan akaun myTakwimKKKua anda.\n\n' +
+    '  Kata laluan sementara: ' + temp + '\n\n' +
+    'Sila log masuk dan tukar kata laluan segera (klik ikon pengguna di kanan atas):\n' +
+    APP_URL + '\n\n' +
+    'Jika anda tidak meminta reset ini, sila hubungi admin sistem.\n\n' +
+    'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.');
+  return emailed ? { emailed: true } : { emailed: false, temp: temp };
+}
+
 /* ===================== API: Aktiviti ===================== */
 
-// Takwim aktiviti kolej bukan data peribadi — semua staf boleh lihat tanpa log masuk.
+// Takwim aktiviti kolej boleh dilihat tanpa log masuk. Nama pegawai pengisi ialah
+// data peribadi (PDPA), jadi ia hanya dipulangkan kepada pengguna yang log masuk.
 // Tambah/kemas kini/padam memerlukan sesi yang sah.
-function apiGetAll() {
+function apiGetAll(token) {
+  const loggedIn = !!validateSession_(token);
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AKTIVITI);
   const rows = sh.getDataRange().getDisplayValues();
   const out = [];
@@ -294,7 +344,7 @@ function apiGetAll() {
     const r = rows[i];
     if (!r[0]) continue;
     out.push({
-      id: r[0], pengisi: r[1], unit: r[2], nama: r[3], mula: r[4], tamat: r[5],
+      id: r[0], pengisi: loggedIn ? r[1] : '', unit: r[2], nama: r[3], mula: r[4], tamat: r[5],
       perlu: r[6], kodOS: r[7], amaun: Number(r[8]) || 0, catatan: r[9], dikemaskini: r[10]
     });
   }

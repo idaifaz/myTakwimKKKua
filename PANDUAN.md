@@ -42,7 +42,13 @@ Peranan:
 
 Admin tidak boleh menukar peranan atau menyahaktif akaun sendiri. Ini supaya sistem tidak terkunci tanpa admin.
 
-Alternatif: admin juga boleh tambah pengguna terus dari editor Apps Script melalui fungsi `tambahPenggunaManual()`. Selepas itu, **kosongkan semula kata laluan** dalam kod.
+## Reset kata laluan
+- Pengguna yang lupa kata laluan perlu hubungi admin.
+- Admin buka tab **Pengguna** dan klik **Reset KL** pada akaun tersebut. Sistem jana kata laluan sementara dan hantar ke emel pengguna.
+- Jika emel gagal dihantar (cth kuota habis), kata laluan sementara dipaparkan kepada admin untuk disampaikan secara manual.
+- Pengguna perlu log masuk dan tukar kata laluan segera.
+
+Alternatif: admin juga boleh tambah pengguna, atau reset kata laluan pengguna sedia ada, terus dari editor Apps Script melalui fungsi `tambahPenggunaManual()`. Selepas itu, **kosongkan semula kata laluan** dalam kod.
 
 ## Notifikasi emel
 Sistem hantar emel secara automatik dalam dua keadaan:
@@ -54,7 +60,7 @@ Emel dihantar dari akaun Gmail pemilik Apps Script. Had Gmail biasa ialah lebih 
 **Kali pertama selepas kemas kini `Code.gs`:** pilih fungsi `ujiEmel`, klik **Run**, kemudian benarkan kebenaran "Send email as you". Satu emel ujian akan masuk ke peti masuk anda. Lepas tu, deploy **New version** macam biasa.
 
 ## Akses
-- Sesiapa yang ada pautan boleh **lihat** dashboard, kalendar, cetakan dan eksport, sebab takwim bukan data peribadi.
+- Sesiapa yang ada pautan boleh **lihat** dashboard, kalendar, cetakan dan eksport. Nama pegawai pengisi hanya dipaparkan kepada pengguna yang log masuk (PDPA).
 - **Tambah, kemas kini dan padam** memerlukan log masuk. Semakan dibuat di server Google.
 
 ## Keselamatan yang sudah dibina
