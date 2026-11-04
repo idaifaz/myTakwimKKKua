@@ -234,10 +234,10 @@
       <div class="card"><div class="card-h"><h3>Bilangan Aktiviti Mengikut Bulan</h3><span class="meta" id="mBarMeta"></span></div><div class="chart-box"><canvas id="chBar" role="img" aria-label="Carta bilangan aktiviti mengikut bulan"></canvas></div></div>
       <div class="card"><div class="card-h"><h3>Bilangan Program Mengikut Unit</h3><span class="meta" id="mUnitMeta"></span></div><div class="chart-box" id="unitBox"><canvas id="chUnit" role="img" aria-label="Carta bilangan program mengikut unit"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-h"><h3>Anggaran Peruntukan Mengikut Unit</h3><span class="meta" id="mUnitTblMeta"></span></div>
+    <div class="card" id="unitTblCard" hidden>
+      <div class="card-h"><h3>Unit Dengan Peruntukan Tertinggi</h3><span class="meta" id="mUnitTblMeta"></span></div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Unit</th><th class="num">Bil. Aktiviti</th><th class="num">Berperuntukan</th><th class="num">Anggaran Peruntukan</th><th class="num">% Peruntukan</th></tr></thead>
+        <thead><tr><th>Unit</th><th class="num">Aktiviti Berperuntukan</th><th class="num">Anggaran Peruntukan</th><th class="num">% Daripada Jumlah</th></tr></thead>
         <tbody id="unitBody"></tbody><tfoot id="unitFoot"></tfoot>
       </table></div>
     </div>
@@ -635,15 +635,21 @@ function renderDashboard() {
 
   $('#mBarMeta').textContent = yLbl + (u ? ' · ' + shortLbl(u, 24) : ' · semua unit');
   $('#mUnitMeta').textContent = yLbl + ' · ' + unitArr.length + ' unit';
-  $('#mUnitTblMeta').textContent = yLbl + ' · disusun ikut peruntukan tertinggi';
 
-  const tblRows = unitArr.slice().sort((p, q) => q.rm - p.rm || q.n - p.n || p.unit.localeCompare(q.unit));
-  $('#unitBody').innerHTML = tblRows.length ? tblRows.map(o => {
-    const pct = totRM ? o.rm / totRM * 100 : 0;
-    return '<tr' + (u && o.unit === u ? ' class="hl"' : '') + '><td>' + esc(o.unit) + '</td><td class="num">' + o.n + '</td><td class="num">' + o.f + '</td><td class="num">' + esc(rm(o.rm)) + '</td>' +
-      '<td class="num">' + (totRM ? '<span class="share" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span>' + pct.toFixed(1) + '%' : '–') + '</td></tr>';
-  }).join('') : '<tr><td colspan="5" class="empty">Tiada aktiviti bagi tahun ini.</td></tr>';
-  $('#unitFoot').innerHTML = tblRows.length ? '<tr><td>JUMLAH</td><td class="num">' + totN + '</td><td class="num">' + totF + '</td><td class="num">' + esc(rm(totRM)) + '</td><td class="num">' + (totRM ? '100.0%' : '–') + '</td></tr>' : '';
+  // Hanya unit yang ada peruntukan; 5 tertinggi sahaja. Tiada peruntukan langsung → kad disorok.
+  const fundedArr = unitArr.filter(o => o.rm > 0).sort((p, q) => q.rm - p.rm || q.f - p.f || p.unit.localeCompare(q.unit));
+  const fundedUnits = fundedArr.length;
+  $('#unitTblCard').hidden = !fundedUnits;
+  if (fundedUnits) {
+    const top = fundedArr.slice(0, 5);
+    $('#mUnitTblMeta').textContent = yLbl + ' · ' + (fundedUnits > 5 ? '5 teratas daripada ' + fundedUnits + ' unit' : fundedUnits + ' unit');
+    $('#unitBody').innerHTML = top.map(o => {
+      const pct = o.rm / totRM * 100;
+      return '<tr' + (u && o.unit === u ? ' class="hl"' : '') + '><td>' + esc(o.unit) + '</td><td class="num">' + o.f + '</td><td class="num">' + esc(rm(o.rm)) + '</td>' +
+        '<td class="num"><span class="share" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span>' + pct.toFixed(1) + '%</td></tr>';
+    }).join('');
+    $('#unitFoot').innerHTML = '<tr><td>Jumlah keseluruhan' + (fundedUnits > 5 ? ' (' + fundedUnits + ' unit)' : '') + '</td><td class="num">' + totF + '</td><td class="num">' + esc(rm(totRM)) + '</td><td class="num">100.0%</td></tr>';
+  }
 
   if (typeof Chart !== 'undefined') {
     const ink = '#64748b', grid = '#eef2f7', teal = '#14998a';
