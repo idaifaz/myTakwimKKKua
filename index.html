@@ -137,6 +137,9 @@
   .ptable td.we { color: var(--red); }
   .ptitle { text-align: center; font-weight: 700; margin: 0 0 10px; font-size: 14px; }
   .ptable td.c { text-align: center; }
+  .ptable th.w-amt { width: 100px; }
+  .ptable th.w-cat { width: 24%; }
+  .ptable th.w-bil { width: 34px; }
   .ptable td.r, .ptable th.r { text-align: right; white-space: nowrap; }
   .ptable tr.mh td { background: #e2e8f0; font-weight: 700; letter-spacing: .02em; }
   .ptable tfoot td { font-weight: 700; background: #f1f5f9; }
@@ -853,7 +856,7 @@ function renderPrint() {
 function renderPrintBulanan(y, m) {
   if (!m) return;
   $('#pTitle').textContent = 'DRAF TAKWIM ' + TAJUK + ' — ' + BULAN[m - 1].toUpperCase() + ' ' + y;
-  let html = '<table class="ptable"><thead><tr><th>TARIKH</th><th>HARI</th><th>UNIT</th><th>NAMA PROGRAM</th><th>CATATAN</th></tr></thead><tbody>';
+  let html = '<table class="ptable"><thead><tr><th>TARIKH</th><th>HARI</th><th>UNIT</th><th>NAMA PROGRAM</th><th class="w-cat">CATATAN</th></tr></thead><tbody>';
   monthRows(y, m).forEach(r => {
     const we = r.dow === 0 || r.dow === 6 ? ' we' : ''; // Sabtu & Ahad = hujung minggu (Pahang)
     const n = Math.max(r.acts.length, 1);
@@ -874,7 +877,7 @@ function renderPrintPeruntukan(y, unit) {
     return;
   }
   const total = rows.reduce((t, a) => t + (+a.amaun || 0), 0);
-  let html = '<table class="ptable"><thead><tr><th>BIL</th><th>TARIKH</th>' + (unit ? '' : '<th>UNIT</th>') + '<th>NAMA PROGRAM</th><th>KOD OS</th><th class="r">AMAUN (RM)</th></tr></thead><tbody>';
+  let html = '<table class="ptable"><thead><tr><th class="w-bil">BIL</th><th>TARIKH</th>' + (unit ? '' : '<th>UNIT</th>') + '<th>NAMA PROGRAM</th><th>KOD OS</th><th class="r w-amt">AMAUN (RM)</th></tr></thead><tbody>';
   rows.forEach((a, i) => {
     html += '<tr><td class="c">' + (i + 1) + '</td><td class="d">' + esc(tarikhJulat(a)) + '</td>' + (unit ? '' : '<td class="c">' + esc(a.unit) + '</td>') +
       '<td>' + esc(a.nama) + '</td><td class="c">' + esc(a.kodOS || '') + '</td><td class="r">' + esc(amtTxt(a)) + '</td></tr>';
@@ -890,7 +893,7 @@ function renderPrintUnit(y, unit) {
   const rows = S.all.filter(a => a.mula.startsWith(y) && a.unit === unit);
   $('#pTitle').textContent = 'TAKWIM TAHUNAN ' + unit + ' — ' + TAJUK + ' ' + y;
   if (!rows.length) { $('#printArea').innerHTML = '<div class="pempty">Tiada aktiviti bagi ' + esc(unit) + ' tahun ' + esc(y) + '.</div>'; return; }
-  let html = '<table class="ptable"><thead><tr><th>BIL</th><th>TARIKH</th><th>HARI</th><th>NAMA PROGRAM</th><th class="r">PERUNTUKAN (RM)</th><th>CATATAN</th></tr></thead><tbody>';
+  let html = '<table class="ptable"><thead><tr><th class="w-bil">BIL</th><th>TARIKH</th><th>HARI</th><th>NAMA PROGRAM</th><th class="r w-amt">PERUNTUKAN (RM)</th><th class="w-cat">CATATAN</th></tr></thead><tbody>';
   let lastM = '', bil = 0, total = 0;
   rows.forEach(a => {
     const m = a.mula.slice(5, 7);
@@ -905,7 +908,11 @@ function renderPrintUnit(y, unit) {
   $('#printArea').innerHTML = html;
 }
 
-$('#pType').addEventListener('change', () => { syncPrintControls(); renderPrint(); });
+$('#pType').addEventListener('change', () => {
+  syncPrintControls();
+  if ($('#pType').value === 'peruntukan') $('#pUnit').value = ''; // senarai peruntukan bermula dengan semua unit
+  renderPrint();
+});
 $('#pUnit').addEventListener('change', renderPrint);
 $('#pMonth').addEventListener('change', renderPrint);
 $('#pYear').addEventListener('change', renderPrint);
