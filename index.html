@@ -72,7 +72,25 @@
   .stat .ic { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; }
   .stat .lbl { font-size: 12px; color: var(--muted); }
   .stat .val { font-size: 22px; font-weight: 700; }
-  .chart-box { position: relative; height: 240px; }
+  .chart-box { position: relative; height: 260px; }
+  .g4 { grid-template-columns: 1fr 1fr; }
+  @media (min-width: 1000px) { .g4 { grid-template-columns: repeat(4, 1fr); } }
+  .kpi { margin-bottom: 0; display: flex; flex-direction: column; gap: 10px; }
+  .kpi .top-row { display: flex; align-items: center; gap: 10px; }
+  .kpi .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+  .kpi .lbl { font-size: 12px; color: var(--muted); font-weight: 500; line-height: 1.3; }
+  .kpi .val { font-size: 26px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi .sub { font-size: 12px; color: var(--muted); }
+  .dash-grid { margin: 14px 0; }
+  .dash-grid .card { margin-bottom: 0; }
+  .card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .card-h h3 { margin: 0; }
+  .card-h .meta { font-size: 12px; color: var(--muted); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tfoot td { font-weight: 700; border-top: 2px solid var(--line); border-bottom: 0; }
+  tr.hl td { background: var(--teal-l); }
+  .share { display: inline-block; width: 60px; height: 6px; border-radius: 3px; background: var(--line); vertical-align: middle; margin-right: 8px; overflow: hidden; }
+  .share i { display: block; height: 100%; background: var(--teal); border-radius: 3px; }
 
   .tbl-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
@@ -205,14 +223,22 @@
       <div class="fld"><label>Unit</label><select id="dUnit"></select></div>
       <button class="btn sq" id="btnRefresh" title="Muat semula"><svg class="i"><use href="#i-refresh"/></svg></button>
     </div>
-    <div class="grid g3">
-      <div class="card stat"><div class="ic" style="background:#dbeafe;color:var(--blue)"><svg class="i"><use href="#i-cal"/></svg></div><div><div class="lbl">Jumlah Aktiviti Tahunan</div><div class="val" id="sCount">0</div></div></div>
-      <div class="card stat"><div class="ic" style="background:#ffedd5;color:var(--orange)"><svg class="i"><use href="#i-users"/></svg></div><div><div class="lbl">Bilangan Unit Terlibat</div><div class="val" id="sUnits">0</div></div></div>
-      <div class="card stat"><div class="ic" style="background:#f3e8ff;color:var(--purple)"><svg class="i"><use href="#i-money"/></svg></div><div><div class="lbl">Anggaran Peruntukan</div><div class="val" id="sBudget">RM 0.00</div></div></div>
+    <div class="grid g4">
+      <div class="card kpi"><div class="top-row"><div class="ic" style="background:#dbeafe;color:var(--blue)"><svg class="i"><use href="#i-cal"/></svg></div><div class="lbl">Jumlah Aktiviti <span class="yrLbl"></span></div></div><div class="val" id="sCount">0</div><div class="sub" id="sCountSub">&nbsp;</div></div>
+      <div class="card kpi"><div class="top-row"><div class="ic" style="background:#ffedd5;color:var(--orange)"><svg class="i"><use href="#i-users"/></svg></div><div class="lbl">Unit Terlibat</div></div><div class="val" id="sUnits">0</div><div class="sub" id="sUnitsSub">&nbsp;</div></div>
+      <div class="card kpi"><div class="top-row"><div class="ic" style="background:#dcfce7;color:var(--green)"><svg class="i"><use href="#i-money"/></svg></div><div class="lbl">Anggaran Peruntukan <span class="yrLbl"></span></div></div><div class="val" id="sBudget">RM 0.00</div><div class="sub" id="sBudgetSub">&nbsp;</div></div>
+      <div class="card kpi"><div class="top-row"><div class="ic" style="background:#f3e8ff;color:var(--purple)"><svg class="i"><use href="#i-bar"/></svg></div><div class="lbl">Bulan Paling Padat</div></div><div class="val" id="sPeak">–</div><div class="sub" id="sPeakSub">&nbsp;</div></div>
     </div>
-    <div class="grid g2">
-      <div class="card"><h3><svg class="i" style="color:var(--teal)"><use href="#i-bar"/></svg>Bilangan Aktiviti Mengikut Bulan</h3><div class="chart-box"><canvas id="chBar"></canvas></div></div>
-      <div class="card"><h3><svg class="i" style="color:var(--orange)"><use href="#i-trend"/></svg>Trend Peruntukan Sepanjang Tahun (RM)</h3><div class="chart-box"><canvas id="chLine"></canvas></div></div>
+    <div class="grid g2 dash-grid">
+      <div class="card"><div class="card-h"><h3>Bilangan Aktiviti Mengikut Bulan</h3><span class="meta" id="mBarMeta"></span></div><div class="chart-box"><canvas id="chBar" role="img" aria-label="Carta bilangan aktiviti mengikut bulan"></canvas></div></div>
+      <div class="card"><div class="card-h"><h3>Bilangan Program Mengikut Unit</h3><span class="meta" id="mUnitMeta"></span></div><div class="chart-box" id="unitBox"><canvas id="chUnit" role="img" aria-label="Carta bilangan program mengikut unit"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Anggaran Peruntukan Mengikut Unit</h3><span class="meta" id="mUnitTblMeta"></span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Unit</th><th class="num">Bil. Aktiviti</th><th class="num">Berperuntukan</th><th class="num">Anggaran Peruntukan</th><th class="num">% Peruntukan</th></tr></thead>
+        <tbody id="unitBody"></tbody><tfoot id="unitFoot"></tfoot>
+      </table></div>
     </div>
     <div class="card">
       <h3 style="justify-content:space-between"><span style="display:flex;gap:8px;align-items:center"><svg class="i"><use href="#i-clock"/></svg>Masukan / Kemas Kini Terkini</span><button class="link" data-go="senarai">Urus Semua →</button></h3>
@@ -561,6 +587,7 @@ function fillSelectors() {
   setOptions($('#eYear'), ys.map(y => [y, 'Tahun ' + y]), true);
   if (first) {
     $('#pYear').value = defY; $('#eYear').value = defY;
+    $('#dYear').value = cy; // dashboard sentiasa mula dengan tahun semasa
     $('#pMonth').innerHTML = BULAN.map((b, i) => '<option value="' + pad(i + 1) + '">' + b + '</option>').join('');
     const m = S.all.find(a => a.mula.startsWith(defY));
     $('#pMonth').value = defY === cy ? pad(new Date().getMonth() + 1) : (m ? m.mula.slice(5, 7) : '01');
@@ -569,23 +596,80 @@ function fillSelectors() {
 }
 
 /* ================= Dashboard ================= */
+const sumRM = (list) => list.reduce((t, a) => t + (a.perlu === 'Ya' ? +a.amaun || 0 : 0), 0);
+const shortLbl = (t, n) => t.length > n ? t.slice(0, n - 1) + '…' : t;
 function renderDashboard() {
   const y = $('#dYear').value, u = $('#dUnit').value;
-  const rows = S.all.filter(a => (!y || a.mula.startsWith(y)) && (!u || a.unit === u));
-  $('#sCount').textContent = rows.length;
-  $('#sUnits').textContent = new Set(rows.map(a => a.unit)).size;
-  $('#sBudget').textContent = rm(rows.reduce((s, a) => s + (a.perlu === 'Ya' ? +a.amaun || 0 : 0), 0));
+  const yLbl = y || 'Semua Tahun';
+  const yearRows = S.all.filter(a => !y || a.mula.startsWith(y));          // ikut tahun sahaja
+  const rows = yearRows.filter(a => !u || a.unit === u);                    // ikut tahun + unit
+  $$('.yrLbl').forEach(el => el.textContent = y ? y : '(Semua Tahun)');
 
-  const cnt = Array(12).fill(0), bud = Array(12).fill(0);
-  rows.forEach(a => { const m = +a.mula.slice(5, 7) - 1; cnt[m]++; if (a.perlu === 'Ya') bud[m] += +a.amaun || 0; });
-  const labels = BULAN.map(b => b.slice(0, 3));
+  // KPI
+  const d0 = new Date(), today = d0.getFullYear() + '-' + pad(d0.getMonth() + 1) + '-' + pad(d0.getDate()); // tarikh tempatan, bukan UTC
+  const upcoming = rows.filter(a => (a.tamat || a.mula) >= today).length;
+  const funded = rows.filter(a => a.perlu === 'Ya');
+  $('#sCount').textContent = rows.length;
+  $('#sCountSub').textContent = upcoming + ' akan datang · ' + (rows.length - upcoming) + ' telah berlalu';
+  $('#sUnits').textContent = new Set(rows.map(a => a.unit)).size;
+  $('#sUnitsSub').textContent = u ? 'Ditapis: ' + shortLbl(u, 28) : 'daripada ' + units().length + ' unit berdaftar';
+  $('#sBudget').textContent = rm(sumRM(rows));
+  $('#sBudgetSub').textContent = funded.length + ' aktiviti memerlukan peruntukan';
+
+  const cnt = Array(12).fill(0);
+  rows.forEach(a => { cnt[+a.mula.slice(5, 7) - 1]++; });
+  const peak = Math.max(...cnt);
+  if (peak > 0) { const pm = cnt.indexOf(peak); $('#sPeak').textContent = BULAN[pm]; $('#sPeakSub').textContent = peak + ' aktiviti dirancang'; }
+  else { $('#sPeak').textContent = '–'; $('#sPeakSub').textContent = 'Tiada aktiviti'; }
+
+  // Ringkasan ikut unit (tahun dipilih, semua unit; unit yang ditapis diserlahkan)
+  const byUnit = {};
+  yearRows.forEach(a => {
+    const k = a.unit || '(TIADA UNIT)';
+    const o = byUnit[k] || (byUnit[k] = { unit: k, n: 0, f: 0, rm: 0 });
+    o.n++; if (a.perlu === 'Ya') { o.f++; o.rm += +a.amaun || 0; }
+  });
+  const unitArr = Object.values(byUnit);
+  const totRM = unitArr.reduce((t, o) => t + o.rm, 0), totN = yearRows.length, totF = unitArr.reduce((t, o) => t + o.f, 0);
+
+  $('#mBarMeta').textContent = yLbl + (u ? ' · ' + shortLbl(u, 24) : ' · semua unit');
+  $('#mUnitMeta').textContent = yLbl + ' · ' + unitArr.length + ' unit';
+  $('#mUnitTblMeta').textContent = yLbl + ' · disusun ikut peruntukan tertinggi';
+
+  const tblRows = unitArr.slice().sort((p, q) => q.rm - p.rm || q.n - p.n || p.unit.localeCompare(q.unit));
+  $('#unitBody').innerHTML = tblRows.length ? tblRows.map(o => {
+    const pct = totRM ? o.rm / totRM * 100 : 0;
+    return '<tr' + (u && o.unit === u ? ' class="hl"' : '') + '><td>' + esc(o.unit) + '</td><td class="num">' + o.n + '</td><td class="num">' + o.f + '</td><td class="num">' + esc(rm(o.rm)) + '</td>' +
+      '<td class="num"><span class="share" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span>' + pct.toFixed(1) + '%</td></tr>';
+  }).join('') : '<tr><td colspan="5" class="empty">Tiada aktiviti bagi tahun ini.</td></tr>';
+  $('#unitFoot').innerHTML = tblRows.length ? '<tr><td>JUMLAH</td><td class="num">' + totN + '</td><td class="num">' + totF + '</td><td class="num">' + esc(rm(totRM)) + '</td><td class="num">' + (totRM ? '100.0%' : '–') + '</td></tr>' : '';
+
   if (typeof Chart !== 'undefined') {
-    const common = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#eef2f7' } }, x: { grid: { display: false } } } };
+    const ink = '#64748b', grid = '#eef2f7', teal = '#14998a';
+    const base = { responsive: true, maintainAspectRatio: false, animation: { duration: 250 },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', padding: 10, displayColors: false } } };
+
     if (S.charts.bar) S.charts.bar.destroy();
-    S.charts.bar = new Chart($('#chBar'), { type: 'bar', data: { labels, datasets: [{ data: cnt, backgroundColor: '#14998a', borderRadius: 4, maxBarThickness: 28 }] }, options: { ...common, scales: { ...common.scales, y: { ...common.scales.y, ticks: { precision: 0 } } } } });
-    if (S.charts.line) S.charts.line.destroy();
-    S.charts.line = new Chart($('#chLine'), { type: 'line', data: { labels, datasets: [{ data: bud, borderColor: '#f97316', backgroundColor: '#f97316', tension: 0.25, pointRadius: 3 }] }, options: { ...common, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => rm(c.parsed.y) } } } } });
+    S.charts.bar = new Chart($('#chBar'), { type: 'bar',
+      data: { labels: BULAN.map(b => b.slice(0, 3)), datasets: [{ data: cnt, backgroundColor: teal, hoverBackgroundColor: '#0f7d71', borderRadius: 4, borderSkipped: 'start', maxBarThickness: 26 }] },
+      options: { ...base,
+        plugins: { ...base.plugins, tooltip: { ...base.plugins.tooltip, callbacks: { title: i => BULAN[i[0].dataIndex] + (y ? ' ' + y : ''), label: c => c.parsed.y + ' aktiviti' } } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0, color: ink }, grid: { color: grid }, border: { display: false } },
+                  x: { ticks: { color: ink }, grid: { display: false } } } } });
+
+    const ch = unitArr.slice().sort((p, q) => q.n - p.n || p.unit.localeCompare(q.unit));
+    $('#unitBox').style.height = Math.max(260, ch.length * 26 + 40) + 'px';
+    if (S.charts.unit) S.charts.unit.destroy();
+    S.charts.unit = new Chart($('#chUnit'), { type: 'bar',
+      data: { labels: ch.map(o => shortLbl(o.unit, 26)), datasets: [{ data: ch.map(o => o.n),
+        backgroundColor: ch.map(o => !u || o.unit === u ? teal : '#b9e3de'), hoverBackgroundColor: '#0f7d71',
+        borderRadius: 4, borderSkipped: 'start', maxBarThickness: 18 }] },
+      options: { ...base, indexAxis: 'y',
+        plugins: { ...base.plugins, tooltip: { ...base.plugins.tooltip, callbacks: { title: i => ch[i[0].dataIndex].unit, label: c => c.parsed.x + ' program' } } },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0, color: ink }, grid: { color: grid }, border: { display: false } },
+                  y: { ticks: { color: '#1e293b', font: { size: 11 }, autoSkip: false }, grid: { display: false } } } } });
   }
+
   const recent = rows.slice().sort((a, b) => String(b.dikemaskini).localeCompare(String(a.dikemaskini))).slice(0, 6);
   $('#recentBody').innerHTML = recent.length ? recent.map(a =>
     '<tr><td>' + esc(fmtD(a.mula)) + '</td><td>' + esc(a.unit) + '</td><td>' + esc(a.nama) + '</td><td>' + (a.perlu === 'Ya' ? '<span class="amt">' + esc(rm0(a.amaun)) + '</span>' : 'Tiada') + '</td></tr>'
