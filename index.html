@@ -145,6 +145,11 @@
   .ptable tfoot td { font-weight: 700; background: #f1f5f9; }
   .pempty { text-align: center; color: var(--muted); padding: 30px 10px; border: 1px dashed var(--line); border-radius: 10px; }
   .pfoot { font-size: 11px; color: var(--muted); margin: 8px 0 0; text-align: right; }
+  .psign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 36px; font-size: 12px; color: #000; page-break-inside: avoid; break-inside: avoid; }
+  .psign .who { font-weight: 600; margin-bottom: 44px; }
+  .psign .line { border-top: 1px dotted #000; width: 75%; margin-bottom: 8px; }
+  .psign .f { display: grid; grid-template-columns: 62px 1fr; margin-bottom: 6px; }
+  .psign .f span:last-child { border-bottom: 1px dotted #999; min-height: 14px; }
 
   .export { text-align: center; max-width: 460px; margin: 0 auto; }
   .export .big { width: 64px; height: 64px; border-radius: 50%; background: #dcfce7; color: var(--green); display: grid; place-items: center; margin: 6px auto 12px; }
@@ -312,7 +317,14 @@
       <div class="fld"><label class="hint">Tahun</label><select id="pYear"></select></div>
       <button class="btn navy" id="btnPrint"><svg class="i"><use href="#i-print"/></svg>Cetak A4</button>
     </div>
-    <div class="card"><p class="ptitle" id="pTitle"></p><div class="tbl-wrap" id="printArea"></div><p class="pfoot" id="pFoot"></p></div>
+    <div class="card"><p class="ptitle" id="pTitle"></p><div class="tbl-wrap" id="printArea"></div>
+      <div class="psign" id="pSign">
+        <div><div class="who">Disediakan oleh:</div><div class="line"></div>
+          <div class="f"><span>Nama</span><span></span></div><div class="f"><span>Jawatan</span><span></span></div><div class="f"><span>Tarikh</span><span></span></div></div>
+        <div><div class="who">Disahkan oleh:</div><div class="line"></div>
+          <div class="f"><span>Nama</span><span></span></div><div class="f"><span>Jawatan</span><span></span></div><div class="f"><span>Tarikh</span><span></span></div></div>
+      </div>
+      <p class="pfoot" id="pFoot"></p></div>
   </section>
 
   <!-- LAPORAN -->
@@ -848,9 +860,11 @@ function renderPrint() {
   if (!y) return;
   const d0 = new Date();
   $('#pFoot').textContent = 'Dicetak pada ' + pad(d0.getDate()) + '/' + pad(d0.getMonth() + 1) + '/' + d0.getFullYear() + ' · myTakwimKKKua';
-  if (t === 'peruntukan') return renderPrintPeruntukan(y, $('#pUnit').value);
-  if (t === 'unit') return renderPrintUnit(y, $('#pUnit').value);
-  renderPrintBulanan(+y, +$('#pMonth').value);
+  if (t === 'peruntukan') renderPrintPeruntukan(y, $('#pUnit').value);
+  else if (t === 'unit') renderPrintUnit(y, $('#pUnit').value);
+  else renderPrintBulanan(+y, +$('#pMonth').value);
+  // Ruang tandatangan hanya bila ada jadual untuk dicetak
+  $('#pSign').hidden = !$('#printArea .ptable');
 }
 
 function renderPrintBulanan(y, m) {
