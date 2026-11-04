@@ -595,7 +595,9 @@ $('#btnRefresh').addEventListener('click', loadAll);
 /* ================= Senarai ================= */
 function renderList() {
   const q = $('#lSearch').value.trim().toUpperCase(), y = $('#lYear').value, m = $('#lMonth').value;
-  const rows = S.all.filter(a => (!y || a.mula.startsWith(y)) && (!m || a.mula.slice(5, 7) === m) && (!q || a.nama.toUpperCase().includes(q) || a.unit.toUpperCase().includes(q)));
+  const rows = S.all.filter(a => (!y || a.mula.startsWith(y)) && (!m || a.mula.slice(5, 7) === m) && (!q || a.nama.toUpperCase().includes(q) || a.unit.toUpperCase().includes(q)))
+    // Tarikh terkini di atas; jika tarikh sama, yang baru dikemas kini dahulu
+    .sort((a, b) => b.mula.localeCompare(a.mula) || String(b.dikemaskini).localeCompare(String(a.dikemaskini)));
   const canEdit = !!S.user, canDel = S.user && S.user.role === 'admin';
   $('#listBody').innerHTML = rows.length ? rows.map(a =>
     '<tr><td style="white-space:nowrap">' + esc(tarikhJulat(a)) + '</td><td>' + esc(a.unit) + '</td><td><b>' + esc(a.nama) + '</b>' + (a.catatan ? '<div class="os">' + esc(a.catatan) + '</div>' : '') + '</td>' +
