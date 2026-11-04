@@ -136,6 +136,12 @@
   .ptable td.d { white-space: nowrap; width: 70px; }
   .ptable td.we { color: var(--red); }
   .ptitle { text-align: center; font-weight: 700; margin: 0 0 10px; font-size: 14px; }
+  .ptable td.c { text-align: center; }
+  .ptable td.r, .ptable th.r { text-align: right; white-space: nowrap; }
+  .ptable tr.mh td { background: #e2e8f0; font-weight: 700; letter-spacing: .02em; }
+  .ptable tfoot td { font-weight: 700; background: #f1f5f9; }
+  .pempty { text-align: center; color: var(--muted); padding: 30px 10px; border: 1px dashed var(--line); border-radius: 10px; }
+  .pfoot { font-size: 11px; color: var(--muted); margin: 8px 0 0; text-align: right; }
 
   .export { text-align: center; max-width: 460px; margin: 0 auto; }
   .export .big { width: 64px; height: 64px; border-radius: 50%; background: #dcfce7; color: var(--green); display: grid; place-items: center; margin: 6px auto 12px; }
@@ -169,6 +175,8 @@
     #page-cetak .card { border: 0; box-shadow: none; padding: 0; }
     .ptable { font-size: 10px; }
     .ptable tr { page-break-inside: avoid; }
+    .ptable thead { display: table-header-group; }
+    .ptable tr.mh td { background: #e2e8f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
 </head>
@@ -204,7 +212,7 @@
     <button class="tab" data-p="tambah"><svg class="i"><use href="#i-plus"/></svg>Tambah Aktiviti</button>
     <button class="tab" data-p="senarai"><svg class="i"><use href="#i-list"/></svg>Senarai &amp; Urus</button>
     <button class="tab" data-p="kalendar"><svg class="i"><use href="#i-cal"/></svg>Kalendar Tahunan</button>
-    <button class="tab" data-p="cetak"><svg class="i"><use href="#i-print"/></svg>Cetak Bulanan</button>
+    <button class="tab" data-p="cetak"><svg class="i"><use href="#i-print"/></svg>Cetak</button>
     <button class="tab" data-p="laporan"><svg class="i"><use href="#i-file"/></svg>Laporan &amp; Eksport</button>
     <button class="tab" data-p="pengguna" id="tabPengguna" hidden><svg class="i"><use href="#i-users"/></svg>Pengguna<span class="badge" id="pendingBadge" hidden></span></button>
   </nav>
@@ -289,13 +297,19 @@
 
   <!-- CETAK -->
   <section class="page" id="page-cetak">
-    <div class="page-h"><h2>Paparan Cetak Bulanan</h2><p>Jadual takwim mengikut format draf (lajur unit)</p></div>
+    <div class="page-h"><h2>Paparan Cetak</h2><p>Cetak takwim bulanan, senarai peruntukan atau takwim tahunan mengikut unit</p></div>
     <div class="print-head">
-      <div class="fld"><label class="hint">Bulan</label><select id="pMonth"></select></div>
+      <div class="fld"><label class="hint">Jenis Cetakan</label><select id="pType">
+        <option value="bulanan">Takwim Bulanan</option>
+        <option value="peruntukan">Senarai Peruntukan (Tahunan)</option>
+        <option value="unit">Takwim Ikut Unit (Tahunan)</option>
+      </select></div>
+      <div class="fld" id="fldMonth"><label class="hint">Bulan</label><select id="pMonth"></select></div>
+      <div class="fld" id="fldUnit" hidden><label class="hint">Unit</label><select id="pUnit"></select></div>
       <div class="fld"><label class="hint">Tahun</label><select id="pYear"></select></div>
       <button class="btn navy" id="btnPrint"><svg class="i"><use href="#i-print"/></svg>Cetak A4</button>
     </div>
-    <div class="card"><p class="ptitle" id="pTitle"></p><div class="tbl-wrap" id="printArea"></div></div>
+    <div class="card"><p class="ptitle" id="pTitle"></p><div class="tbl-wrap" id="printArea"></div><p class="pfoot" id="pFoot"></p></div>
   </section>
 
   <!-- LAPORAN -->
@@ -594,6 +608,7 @@ function fillSelectors() {
     $('#pMonth').value = defY === cy ? pad(new Date().getMonth() + 1) : (m ? m.mula.slice(5, 7) : '01');
   }
   $('#unitList').innerHTML = units().map(u => '<option value="' + esc(u) + '">').join('');
+  syncPrintControls();
 }
 
 /* ================= Dashboard ================= */
@@ -799,7 +814,7 @@ function showDetail(a) {
   openModal('#mDetail');
 }
 
-/* ================= Cetak bulanan ================= */
+/* ================= Cetak ================= */
 function monthRows(y, m) {
   // Satu baris setiap hari; aktiviti diletak pada tarikh mula (julat tarikh ditunjuk jika lebih sehari)
   const days = new Date(y, m, 0).getDate(), out = [];
@@ -810,25 +825,88 @@ function monthRows(y, m) {
   }
   return out;
 }
-const peruntukanTxt = (a) => a.perlu === 'Ya' ? rm0(a.amaun) + (a.kodOS ? ' (' + a.kodOS + ')' : '') : '';
+const peruntukanTxt = (a) => a.perlu === 'Ya' ? rm0(a.amaun) + (a.kodOS ? ' (' + a.kodOS + ')' : '') : ''; // digunakan oleh eksport Excel
 const namaTxt = (a) => a.nama + (a.tamat && a.tamat !== a.mula ? ' (' + fmtD(a.mula) + ' – ' + fmtD(a.tamat) + ')' : '');
+const hariOf = (iso) => HARI[new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)).getDay()];
+const amtTxt = (a) => a.perlu === 'Ya' ? Number(a.amaun || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+const TAJUK = 'KOLEJ KOMUNITI KUANTAN';
+
+function syncPrintControls() {
+  const t = $('#pType').value;
+  $('#fldMonth').hidden = t !== 'bulanan';
+  $('#fldUnit').hidden = t === 'bulanan';
+  // "Semua Unit" hanya untuk senarai peruntukan; takwim ikut unit perlu satu unit dipilih
+  const opts = (t === 'peruntukan' ? [['', 'Semua Unit']] : []).concat(units().map(u => [u, u]));
+  setOptions($('#pUnit'), opts, true);
+}
 
 function renderPrint() {
-  const y = +$('#pYear').value, m = +$('#pMonth').value;
-  if (!y || !m) return;
-  $('#pTitle').textContent = 'DRAF TAKWIM KOLEJ KOMUNITI KUANTAN — ' + BULAN[m - 1].toUpperCase() + ' ' + y;
-  let html = '<table class="ptable"><thead><tr><th>TARIKH</th><th>HARI</th><th>UNIT</th><th>NAMA PROGRAM</th><th>PERUNTUKAN YG DIPERLUKAN (JIKA ADA)</th></tr></thead><tbody>';
+  const t = $('#pType').value, y = $('#pYear').value;
+  if (!y) return;
+  const d0 = new Date();
+  $('#pFoot').textContent = 'Dicetak pada ' + pad(d0.getDate()) + '/' + pad(d0.getMonth() + 1) + '/' + d0.getFullYear() + ' · myTakwimKKKua';
+  if (t === 'peruntukan') return renderPrintPeruntukan(y, $('#pUnit').value);
+  if (t === 'unit') return renderPrintUnit(y, $('#pUnit').value);
+  renderPrintBulanan(+y, +$('#pMonth').value);
+}
+
+function renderPrintBulanan(y, m) {
+  if (!m) return;
+  $('#pTitle').textContent = 'DRAF TAKWIM ' + TAJUK + ' — ' + BULAN[m - 1].toUpperCase() + ' ' + y;
+  let html = '<table class="ptable"><thead><tr><th>TARIKH</th><th>HARI</th><th>UNIT</th><th>NAMA PROGRAM</th><th>CATATAN</th></tr></thead><tbody>';
   monthRows(y, m).forEach(r => {
     const we = r.dow === 0 || r.dow === 6 ? ' we' : ''; // Sabtu & Ahad = hujung minggu (Pahang)
     const n = Math.max(r.acts.length, 1);
     const dcell = '<td class="d' + we + '" rowspan="' + n + '">' + pad(r.d) + ' ' + BLN3[m - 1] + '</td><td class="d' + we + '" rowspan="' + n + '">' + HARI[r.dow] + '</td>';
     if (!r.acts.length) html += '<tr>' + dcell + '<td></td><td></td><td></td></tr>';
     r.acts.forEach((a, i) => {
-      html += '<tr>' + (i === 0 ? dcell : '') + '<td style="text-align:center">' + esc(a.unit) + '</td><td>' + esc(namaTxt(a)) + '</td><td style="text-align:center">' + esc(peruntukanTxt(a)) + '</td></tr>';
+      html += '<tr>' + (i === 0 ? dcell : '') + '<td class="c">' + esc(a.unit) + '</td><td>' + esc(namaTxt(a)) + '</td><td>' + esc(a.catatan || '') + '</td></tr>';
     });
   });
   $('#printArea').innerHTML = html + '</tbody></table>';
 }
+
+function renderPrintPeruntukan(y, unit) {
+  const rows = S.all.filter(a => a.mula.startsWith(y) && a.perlu === 'Ya' && (!unit || a.unit === unit));
+  $('#pTitle').textContent = 'SENARAI PERUNTUKAN AKTIVITI ' + TAJUK + ' — ' + y + (unit ? ' (' + unit + ')' : '');
+  if (!rows.length) {
+    $('#printArea').innerHTML = '<div class="pempty">Tiada aktiviti yang memerlukan peruntukan bagi ' + esc(unit || 'semua unit') + ' tahun ' + esc(y) + '.</div>';
+    return;
+  }
+  const total = rows.reduce((t, a) => t + (+a.amaun || 0), 0);
+  let html = '<table class="ptable"><thead><tr><th>BIL</th><th>TARIKH</th>' + (unit ? '' : '<th>UNIT</th>') + '<th>NAMA PROGRAM</th><th>KOD OS</th><th class="r">AMAUN (RM)</th></tr></thead><tbody>';
+  rows.forEach((a, i) => {
+    html += '<tr><td class="c">' + (i + 1) + '</td><td class="d">' + esc(tarikhJulat(a)) + '</td>' + (unit ? '' : '<td class="c">' + esc(a.unit) + '</td>') +
+      '<td>' + esc(a.nama) + '</td><td class="c">' + esc(a.kodOS || '') + '</td><td class="r">' + esc(amtTxt(a)) + '</td></tr>';
+  });
+  const span = unit ? 4 : 5;
+  html += '</tbody><tfoot><tr><td colspan="' + span + '" class="r">JUMLAH KESELURUHAN (' + rows.length + ' aktiviti)</td><td class="r">' +
+    esc(total.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) + '</td></tr></tfoot></table>';
+  $('#printArea').innerHTML = html;
+}
+
+function renderPrintUnit(y, unit) {
+  if (!unit) { $('#pTitle').textContent = ''; $('#printArea').innerHTML = '<div class="pempty">Pilih unit untuk dicetak.</div>'; return; }
+  const rows = S.all.filter(a => a.mula.startsWith(y) && a.unit === unit);
+  $('#pTitle').textContent = 'TAKWIM TAHUNAN ' + unit + ' — ' + TAJUK + ' ' + y;
+  if (!rows.length) { $('#printArea').innerHTML = '<div class="pempty">Tiada aktiviti bagi ' + esc(unit) + ' tahun ' + esc(y) + '.</div>'; return; }
+  let html = '<table class="ptable"><thead><tr><th>BIL</th><th>TARIKH</th><th>HARI</th><th>NAMA PROGRAM</th><th class="r">PERUNTUKAN (RM)</th><th>CATATAN</th></tr></thead><tbody>';
+  let lastM = '', bil = 0, total = 0;
+  rows.forEach(a => {
+    const m = a.mula.slice(5, 7);
+    if (m !== lastM) { html += '<tr class="mh"><td colspan="6">' + BULAN[+m - 1].toUpperCase() + '</td></tr>'; lastM = m; }
+    const hari = a.tamat && a.tamat !== a.mula ? hariOf(a.mula) + ' – ' + hariOf(a.tamat) : hariOf(a.mula);
+    if (a.perlu === 'Ya') total += +a.amaun || 0;
+    html += '<tr><td class="c">' + (++bil) + '</td><td class="d">' + esc(tarikhJulat(a)) + '</td><td class="d">' + esc(hari) + '</td><td>' + esc(a.nama) + '</td>' +
+      '<td class="r">' + esc(amtTxt(a)) + '</td><td>' + esc(a.catatan || '') + '</td></tr>';
+  });
+  html += '</tbody><tfoot><tr><td colspan="4" class="r">JUMLAH: ' + bil + ' aktiviti</td><td class="r">' +
+    (total ? esc(total.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '–') + '</td><td></td></tr></tfoot></table>';
+  $('#printArea').innerHTML = html;
+}
+
+$('#pType').addEventListener('change', () => { syncPrintControls(); renderPrint(); });
+$('#pUnit').addEventListener('change', renderPrint);
 $('#pMonth').addEventListener('change', renderPrint);
 $('#pYear').addEventListener('change', renderPrint);
 $('#btnPrint').addEventListener('click', () => window.print());
