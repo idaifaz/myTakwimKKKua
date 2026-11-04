@@ -6,6 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>myTakwimKKKua</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/ms.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
@@ -226,8 +229,8 @@
       <div class="row"><label for="fPengisi">1. Nama Pegawai Pengisi</label><input id="fPengisi" maxlength="100"></div>
       <div class="row"><label class="req" for="fUnit">2. Unit / Bahagian</label><input id="fUnit" list="unitList" placeholder="PILIH ATAU TAIP UNIT BAHARU" maxlength="100" required><datalist id="unitList"></datalist></div>
       <div class="row"><label class="req" for="fNama">3. Nama Program / Aktiviti</label><input id="fNama" maxlength="300" required></div>
-      <div class="row"><label class="req" for="fMula">4. Tarikh Mula</label><input type="date" id="fMula" required></div>
-      <div class="row"><label for="fTamat">5. Tarikh Tamat (Pilihan)</label><input type="date" id="fTamat"><div class="hint">Biarkan kosong jika aktiviti sehari sahaja.</div></div>
+      <div class="row"><label class="req" for="fMula">4. Tarikh Mula</label><input type="text" id="fMula" placeholder="dd/mm/yyyy" autocomplete="off" required></div>
+      <div class="row"><label for="fTamat">5. Tarikh Tamat (Pilihan)</label><input type="text" id="fTamat" placeholder="dd/mm/yyyy" autocomplete="off"><div class="hint">Biarkan kosong jika aktiviti sehari sahaja.</div></div>
       <div class="row"><label class="req" for="fPerlu">6. Perlu Peruntukan?</label><select id="fPerlu"><option>Tidak</option><option>Ya</option></select></div>
       <div class="row" id="rowPeruntukan" hidden>
         <label>7. Maklumat Peruntukan</label>
@@ -621,16 +624,30 @@ $('#listBody').addEventListener('click', async (e) => {
   }
 });
 
+/* ================= Pemilih tarikh =================
+   Input tarikh asli pelayar ikut bahasa komputer pengguna (cth mm/dd/yyyy),
+   jadi guna flatpickr: paparan dd/mm/yyyy, nilai sebenar kekal yyyy-mm-dd. */
+const FP = {};
+['#fMula', '#fTamat'].forEach(id => {
+  if (typeof flatpickr === 'undefined') { $(id).type = 'date'; return; } // CDN gagal → kembali ke input asli
+  FP[id] = flatpickr($(id), {
+    dateFormat: 'Y-m-d', altInput: true, altFormat: 'd/m/Y', allowInput: true, disableMobile: true,
+    locale: (flatpickr.l10ns && flatpickr.l10ns.ms) || 'default'
+  });
+  FP[id].altInput.placeholder = 'dd/mm/yyyy';
+});
+const setDate = (id, v) => { if (FP[id]) FP[id].setDate(v || null, false); else $(id).value = v || ''; };
+
 /* ================= Borang ================= */
 function resetForm() {
-  $('#actForm').reset(); $('#fId').value = ''; $('#rowPeruntukan').hidden = true;
+  $('#actForm').reset(); setDate('#fMula', ''); setDate('#fTamat', ''); $('#fId').value = ''; $('#rowPeruntukan').hidden = true;
   $('#formTitle').textContent = 'Tambah Aktiviti'; $('#btnSave').textContent = 'Simpan Aktiviti';
   if (S.user) $('#fPengisi').value = S.user.nama || '';
 }
 function editActivity(a) {
   resetForm();
   $('#fId').value = a.id; $('#fPengisi').value = a.pengisi || ''; $('#fUnit').value = a.unit; $('#fNama').value = a.nama;
-  $('#fMula').value = a.mula; $('#fTamat').value = a.tamat || ''; $('#fPerlu').value = a.perlu === 'Ya' ? 'Ya' : 'Tidak';
+  setDate('#fMula', a.mula); setDate('#fTamat', a.tamat || ''); $('#fPerlu').value = a.perlu === 'Ya' ? 'Ya' : 'Tidak';
   $('#fKodOS').value = a.kodOS || ''; $('#fAmaun').value = a.perlu === 'Ya' ? a.amaun : ''; $('#fCatatan').value = a.catatan || '';
   $('#rowPeruntukan').hidden = a.perlu !== 'Ya';
   $('#formTitle').textContent = 'Kemas Kini Aktiviti'; $('#btnSave').textContent = 'Simpan Perubahan';
@@ -645,6 +662,7 @@ $('#actForm').addEventListener('submit', async (e) => {
     mula: $('#fMula').value, tamat: $('#fTamat').value, perlu: $('#fPerlu').value, kodOS: $('#fKodOS').value.trim(),
     amaun: $('#fAmaun').value, catatan: $('#fCatatan').value.trim()
   };
+  if (!a.mula) return toast('Sila isi tarikh mula.', true);
   if (a.tamat && a.tamat < a.mula) return toast('Tarikh tamat tidak boleh sebelum tarikh mula.', true);
   if (a.perlu === 'Ya' && (a.amaun === '' || +a.amaun < 0)) return toast('Sila isi amaun peruntukan.', true);
   $('#btnSave').disabled = true; busy(true);
