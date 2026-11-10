@@ -12,7 +12,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --navy: #1b2a4a; --navy-2: #24365c; --teal: #14998a; --teal-d: #0f7d71; --teal-l: #e6f6f4;
@@ -332,8 +331,8 @@
     <div class="page-h"><h2>Laporan &amp; Eksport</h2><p>Muat turun draf takwim untuk tujuan laporan</p></div>
     <div class="card export">
       <div class="big"><svg class="i"><use href="#i-file"/></svg></div>
-      <h3 style="justify-content:center">Eksport Draf Takwim (Excel)</h3>
-      <p class="hint" style="margin-bottom:14px">Menjana fail Excel dengan 12 worksheet bulanan (JAN – DIS).</p>
+      <h3 style="justify-content:center">Eksport Takwim Tahunan (Excel)</h3>
+      <p class="hint" style="margin-bottom:14px">Takwim tahunan dalam 3 worksheet (JAN–APR, MEI–OGOS, SEPT–DIS), satu baris setiap hari, termasuk cuti umum Pahang.</p>
       <div class="fld" style="margin-bottom:12px"><select id="eYear"></select></div>
       <button class="btn green" id="btnExport" style="width:100%"><svg class="i"><use href="#i-down"/></svg>Muat Turun Excel</button>
     </div>
@@ -840,7 +839,6 @@ function monthRows(y, m) {
   }
   return out;
 }
-const peruntukanTxt = (a) => a.perlu === 'Ya' ? rm0(a.amaun) + (a.kodOS ? ' (' + a.kodOS + ')' : '') : ''; // digunakan oleh eksport Excel
 const namaTxt = (a) => a.nama + (a.tamat && a.tamat !== a.mula ? ' (' + fmtD(a.mula) + ' – ' + fmtD(a.tamat) + ')' : '');
 const hariOf = (iso) => HARI[new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)).getDay()];
 const amtTxt = (a) => a.perlu === 'Ya' ? Number(a.amaun || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
@@ -933,24 +931,214 @@ $('#pYear').addEventListener('change', renderPrint);
 $('#btnPrint').addEventListener('click', () => window.print());
 
 /* ================= Eksport Excel ================= */
-$('#btnExport').addEventListener('click', () => {
-  if (typeof XLSX === 'undefined') return toast('Pustaka Excel gagal dimuat. Semak sambungan internet.', true);
-  const y = +$('#eYear').value;
-  const wb = XLSX.utils.book_new();
-  for (let m = 1; m <= 12; m++) {
-    const aoa = [['DRAF TAKWIM KOLEJ KOMUNITI KUANTAN ' + BULAN[m - 1].toUpperCase() + ' ' + y], [], ['TARIKH', 'HARI', 'UNIT', 'NAMA PROGRAM', 'PERUNTUKAN YG DIPERLUKAN (JIKA ADA)', 'CATATAN']];
-    monthRows(y, m).forEach(r => {
-      const dt = pad(r.d) + '/' + pad(m) + '/' + y;
-      if (!r.acts.length) aoa.push([dt, HARI[r.dow], '', '', '', '']);
-      r.acts.forEach(a => aoa.push([dt, HARI[r.dow], a.unit, namaTxt(a), peruntukanTxt(a), a.catatan || '']));
+/* Format ikut templat "TAKWIM TAHUNAN KKKUA": 3 worksheet (JAN-APR, MEI-OGOS, SEPT-DIS),
+   satu baris setiap hari, lajur Minggu | Hari | Tarikh | Aktiviti | Penyelaras | Catatan,
+   cuti umum Pahang diwarnakan ikut jenis. */
+
+// Cuti umum Pahang: [tarikh, nama, jenis]. Jenis: Persekutuan / Negeri / Gantian / Cuti Khas.
+// Tanda * = tertakluk kepada perubahan (tarikh bergantung rukyah/pengisytiharan).
+// Tahun baharu: tambah senarai di sini apabila kalendar cuti rasmi diterbitkan.
+const CUTI_PAHANG = {
+  2026: [
+    ['2026-01-01', 'Tahun Baharu', 'Negeri'],
+    ['2026-02-17', 'Tahun Baharu Cina', 'Persekutuan'],
+    ['2026-02-18', 'Tahun Baharu Cina (Hari Kedua)', 'Persekutuan'],
+    ['2026-03-07', 'Hari Nuzul Al-Quran', 'Negeri'],
+    ['2026-03-20', 'Cuti Khas Tambahan Hari Raya Aidilfitri', 'Cuti Khas'],
+    ['2026-03-21', 'Hari Raya Aidilfitri', 'Persekutuan'],
+    ['2026-03-22', 'Hari Raya Aidilfitri (Hari Kedua)', 'Persekutuan'],
+    ['2026-03-23', 'Cuti Gantian Hari Raya Aidilfitri', 'Gantian'],
+    ['2026-05-01', 'Hari Pekerja', 'Persekutuan'],
+    ['2026-05-22', 'Hari Hol Almarhum Sultan Ahmad Shah Al-Musta’in Billah', 'Negeri'],
+    ['2026-05-27', 'Hari Raya Aidiladha', 'Persekutuan'],
+    ['2026-05-31', 'Hari Wesak', 'Persekutuan'],
+    ['2026-06-01', 'Hari Keputeraan Rasmi Yang di-Pertuan Agong', 'Persekutuan'],
+    ['2026-06-02', 'Cuti Gantian Hari Wesak', 'Gantian'],
+    ['2026-06-17', 'Awal Muharam (Maal Hijrah)', 'Persekutuan'],
+    ['2026-07-31', 'Hari Keputeraan Sultan Pahang', 'Negeri'],
+    ['2026-08-25', 'Maulidur Rasul', 'Persekutuan'],
+    ['2026-08-31', 'Hari Kebangsaan', 'Persekutuan'],
+    ['2026-09-16', 'Hari Malaysia', 'Persekutuan'],
+    ['2026-11-08', 'Hari Deepavali', 'Persekutuan'],
+    ['2026-11-09', 'Cuti Gantian Hari Deepavali', 'Gantian'],
+    ['2026-12-25', 'Hari Krismas', 'Persekutuan']
+  ],
+  2027: [
+    ['2027-01-01', 'Tahun Baharu', 'Negeri'],
+    ['2027-02-06', 'Tahun Baharu Cina', 'Persekutuan'],
+    ['2027-02-07', 'Tahun Baharu Cina (Hari Kedua)', 'Persekutuan'],
+    ['2027-02-08', 'Cuti Gantian Tahun Baharu Cina', 'Gantian*'],
+    ['2027-02-24', 'Hari Nuzul Al-Quran', 'Negeri'],
+    ['2027-03-10', 'Hari Raya Aidilfitri', 'Persekutuan*'],
+    ['2027-03-11', 'Hari Raya Aidilfitri (Hari Kedua)', 'Persekutuan*'],
+    ['2027-05-01', 'Hari Pekerja', 'Persekutuan'],
+    ['2027-05-17', 'Hari Raya Aidiladha', 'Persekutuan*'],
+    ['2027-05-20', 'Hari Wesak', 'Persekutuan'],
+    ['2027-05-22', 'Hari Hol Almarhum Sultan Ahmad Shah Al-Musta’in Billah', 'Negeri'],
+    ['2027-06-06', 'Awal Muharam (Maal Hijrah)', 'Persekutuan'],
+    ['2027-06-07', 'Hari Keputeraan Rasmi Yang di-Pertuan Agong', 'Persekutuan'],
+    ['2027-06-08', 'Cuti Gantian Awal Muharam', 'Gantian*'],
+    ['2027-07-30', 'Hari Keputeraan Sultan Pahang', 'Negeri'],
+    ['2027-08-15', 'Maulidur Rasul', 'Persekutuan'],
+    ['2027-08-16', 'Cuti Gantian Maulidur Rasul', 'Gantian*'],
+    ['2027-08-31', 'Hari Kebangsaan', 'Persekutuan'],
+    ['2027-09-16', 'Hari Malaysia', 'Persekutuan'],
+    ['2027-10-28', 'Hari Deepavali', 'Persekutuan*'],
+    ['2027-12-25', 'Hari Krismas', 'Persekutuan']
+  ]
+};
+
+/* XLSX-BUILDER-START */
+function buildTakwimWorkbook(ExcelJS, year, acts, cuti) {
+  const BLN = ['JANUARI','FEBRUARI','MAC','APRIL','MEI','JUN','JULAI','OGOS','SEPTEMBER','OKTOBER','NOVEMBER','DISEMBER'];
+  const HURUF = ['A','I','S','R','K','J','S']; // Ahad..Sabtu
+  const p2 = (n) => String(n).padStart(2, '0');
+  const fmt = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+  const FONT = 'Aptos';
+  const C = { navy: 'FF17374B', teal: 'FF176B72', headBg: 'FFE7F2F2', weekBg: 'FFF7FAFB', ink: 'FF203746',
+    line: 'FFD9E2E7', wkend: 'FFF0F3F5', white: 'FFFFFFFF',
+    Persekutuan: 'FFE3EDF8', Negeri: 'FFDDEFEA', Gantian: 'FFFFF2D6', 'Cuti Khas': 'FFFFF2D6' };
+  const fill = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+  const side = (style) => ({ style, color: { argb: C.line } });
+  const hair = { top: side('hair'), left: side('hair'), bottom: side('hair'), right: side('hair') };
+  const thin = { top: side('thin'), left: side('thin'), bottom: side('thin'), right: side('thin') };
+  const SHEETS = [['JAN-APR', [1, 2, 3, 4]], ['MEI-OGOS', [5, 6, 7, 8]], ['SEPT-DIS', [9, 10, 11, 12]]];
+  const WIDTH = { E: 64, F: 23, G: 21 };
+
+  // Minggu: Isnin–Ahad, minggu 1 = minggu yang mengandungi 1 Januari
+  const jan1 = new Date(year, 0, 1), off = (jan1.getDay() + 6) % 7;
+  const weekOf = (d) => Math.floor((Math.round((d - jan1) / 864e5) + off) / 7) + 1;
+
+  // Anggaran tinggi baris (Excel tidak auto-fit baris yang ditulis oleh pustaka)
+  const linesFor = (txt, w) => String(txt || '').split('\n').reduce((n, part) => {
+    const upper = part.length && part === part.toUpperCase();
+    const cap = Math.max(8, w * (upper ? 0.82 : 1.0));
+    return n + Math.max(1, Math.ceil(part.length / cap));
+  }, 0);
+  const heightFor = (vals, base) => {
+    const lines = Math.max(linesFor(vals.E, WIDTH.E), linesFor(vals.F, WIDTH.F), linesFor(vals.G, WIDTH.G));
+    return Math.max(base, lines * 15 + 9);
+  };
+
+  const holByDate = {};
+  (cuti || []).forEach(([iso, nama, jenis]) => (holByDate[iso] = holByDate[iso] || []).push({ nama, jenis }));
+  const actByDate = {};
+  (acts || []).filter(a => a.mula && a.mula.startsWith(String(year))).forEach(a => (actByDate[a.mula] = actByDate[a.mula] || []).push(a));
+  Object.values(actByDate).forEach(l => l.sort((a, b) => String(a.unit).localeCompare(String(b.unit)) || String(a.nama).localeCompare(String(b.nama))));
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'myTakwimKKKua';
+  wb.created = new Date();
+
+  SHEETS.forEach(([name, months], si) => {
+    const ws = wb.addWorksheet(name, {
+      views: [{ state: 'frozen', ySplit: si === 0 ? 4 : 2, showGridLines: false }],
+      pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+        horizontalCentered: true, margins: { left: 0.3, right: 0.3, top: 0.35, bottom: 0.35, header: 0, footer: 0 } }
     });
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 12 }, { wch: 9 }, { wch: 28 }, { wch: 60 }, { wch: 26 }, { wch: 30 }];
-    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
-    XLSX.utils.book_append_sheet(wb, ws, BLN3[m - 1]);
-  }
-  XLSX.writeFile(wb, 'Draf_Takwim_KKKua_' + y + '.xlsx');
-  toast('Fail Excel dijana.');
+    ws.columns = [{ width: 10.14 }, { width: 10.14 }, { width: 10.14 }, { width: 10.14 }, { width: WIDTH.E }, { width: WIDTH.F }, { width: WIDTH.G }];
+    let r = 1;
+
+    const banner = (text, size, height) => {
+      ws.mergeCells(r, 1, r, 7);
+      const c = ws.getCell(r, 1);
+      c.value = text; c.font = { name: FONT, size, bold: true, color: { argb: C.white } };
+      c.fill = fill(C.navy); c.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(r).height = height; r++;
+    };
+    if (si === 0) { banner('TAKWIM AKTIVITI TAHUNAN ' + year, 22, 45); banner('KOLEJ KOMUNITI KUANTAN', 18, 30); }
+
+    months.forEach(m => {
+      // Tajuk bulan
+      ws.mergeCells(r, 1, r, 7);
+      const mh = ws.getCell(r, 1);
+      mh.value = BLN[m - 1] + ' ' + year;
+      mh.font = { name: FONT, size: 15, bold: true, color: { argb: C.white } };
+      mh.fill = fill(C.teal); mh.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+      ws.getRow(r).height = 36.75; r++;
+
+      // Kepala lajur
+      ws.mergeCells(r, 1, r, 2);
+      [['A', 'Minggu'], ['C', 'Hari'], ['D', 'Tarikh'], ['E', 'Aktiviti'], ['F', 'Penyelaras'], ['G', 'Catatan']].forEach(([col, t]) => {
+        const c = ws.getCell(col + r); c.value = t;
+      });
+      for (let col = 1; col <= 7; col++) {
+        const c = ws.getCell(r, col);
+        c.font = { name: FONT, size: 15, bold: true, color: { argb: C.teal } };
+        c.fill = fill(C.headBg); c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      }
+      ws.getRow(r).height = 27.75; r++;
+
+      const days = new Date(year, m, 0).getDate();
+      let wkStart = r, wkNo = null;
+      const closeWeek = (endRow) => {
+        if (wkNo == null) return;
+        ws.mergeCells(wkStart, 1, endRow, 2);
+        const c = ws.getCell(wkStart, 1);
+        c.value = wkNo; c.font = { name: FONT, size: 11, bold: true, color: { argb: C.teal } };
+        c.fill = fill(C.weekBg); c.alignment = { horizontal: 'center', vertical: 'middle' }; c.border = thin;
+      };
+
+      for (let d = 1; d <= days; d++) {
+        const dt = new Date(year, m - 1, d), dow = dt.getDay(), iso = year + '-' + p2(m) + '-' + p2(d);
+        const wk = weekOf(dt);
+        if (wk !== wkNo) { closeWeek(r - 1); wkNo = wk; wkStart = r; }
+        const dayBg = dow === 0 || dow === 6 ? C.wkend : C.white;
+
+        const items = (holByDate[iso] || []).map(h => ({ kind: 'cuti', E: h.nama, F: '', G: h.jenis, bg: C[String(h.jenis).replace('*', '')] || C.Persekutuan }))
+          .concat((actByDate[iso] || []).map(a => {
+            const nama = a.nama + (a.tamat && a.tamat !== a.mula ? ' (' + fmt(a.mula) + ' – ' + fmt(a.tamat) + ')' : '');
+            const notes = [];
+            if (a.catatan) notes.push(a.catatan);
+            if (a.perlu === 'Ya' && +a.amaun) notes.push('Peruntukan: RM ' + Number(a.amaun).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (a.kodOS ? ' (' + a.kodOS + ')' : ''));
+            return { kind: 'aktiviti', E: nama, F: a.unit || '', G: notes.join('\n'), bg: dayBg };
+          }));
+        if (!items.length) items.push({ kind: 'kosong', E: '', F: '', G: '', bg: dayBg });
+
+        const first = r;
+        items.forEach(it => {
+          const row = ws.getRow(r);
+          ['E', 'F', 'G'].forEach(col => {
+            const c = ws.getCell(col + r);
+            if (it[col]) c.value = it[col];
+            c.fill = fill(it.bg); c.border = hair;
+            c.alignment = { vertical: 'middle', wrapText: true, horizontal: col === 'F' ? 'center' : undefined };
+            c.font = { name: FONT, size: 11, color: { argb: col === 'E' && it.kind === 'cuti' ? C.navy : C.ink }, bold: col === 'E' && it.kind === 'cuti' };
+          });
+          row.height = it.kind === 'kosong' ? 27 : heightFor(it, it.kind === 'cuti' ? 31.5 : 27);
+          r++;
+        });
+        if (r - 1 > first) { ws.mergeCells(first, 3, r - 1, 3); ws.mergeCells(first, 4, r - 1, 4); }
+        [[3, HURUF[dow]], [4, d]].forEach(([col, v]) => {
+          const c = ws.getCell(first, col);
+          c.value = v; c.fill = fill(dayBg); c.border = hair;
+          c.font = { name: FONT, size: 11, color: { argb: C.ink } };
+          c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        });
+      }
+      closeWeek(r - 1);
+    });
+  });
+  return wb;
+}
+/* XLSX-BUILDER-END */
+
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Gagal memuat ' + src)); document.head.appendChild(s); });
+}
+$('#btnExport').addEventListener('click', async () => {
+  const y = +$('#eYear').value;
+  busy(true);
+  try {
+    if (typeof ExcelJS === 'undefined') await loadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
+    const wb = buildTakwimWorkbook(ExcelJS, y, S.all, CUTI_PAHANG[y] || []);
+    const buf = await wb.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const a = document.createElement('a'); a.href = url; a.download = y + '_TAKWIM_TAHUNAN_KKKUA.xlsx';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+    busy(false);
+    toast(CUTI_PAHANG[y] ? 'Fail Excel dijana.' : 'Fail Excel dijana. Senarai cuti umum ' + y + ' belum dimasukkan dalam sistem.');
+  } catch (e) { busy(false); toast('Eksport gagal: ' + e.message + '. Semak sambungan internet.', true); }
 });
 
 /* ================= Urus pengguna (admin) ================= */
