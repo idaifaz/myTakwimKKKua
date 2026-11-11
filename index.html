@@ -1207,7 +1207,14 @@ function renderUsers() {
 }
 async function userAction(fn, args, msg) {
   busy(true);
-  try { await api(fn, S.token, ...args); toast(msg); await loadUsers(); }
+  try {
+    const r = await api(fn, S.token, ...args);
+    // Kelulusan akaun: maklumkan sama ada emel notifikasi berjaya dihantar
+    if (r && r.emailed === true) toast(msg + ' Emel notifikasi dihantar.');
+    else if (r && r.emailed === false) toast(msg + ' Tetapi emel notifikasi GAGAL: ' + (r.emailError || 'sebab tidak diketahui') + '. Sila maklumkan pengguna secara manual.', true);
+    else toast(msg);
+    await loadUsers();
+  }
   catch (err) { handleErr(err); renderUsers(); }
   busy(false);
 }
@@ -1231,7 +1238,7 @@ async function resetPassword(u) {
     $('#dtTitle').textContent = 'Kata laluan sementara';
     $('#dtBody').innerHTML = '<dt>Pengguna</dt><dd>' + esc(u.nama) + '</dd><dt>Emel</dt><dd>' + esc(u.email) + '</dd>' +
       '<dt>Kata laluan</dt><dd><b style="font-family:monospace;font-size:1.1em">' + esc(r && r.temp || '-') + '</b></dd>' +
-      '<dt>Nota</dt><dd>Emel tidak dapat dihantar. Sampaikan kata laluan ini terus kepada pengguna dan minta mereka tukar segera.</dd>';
+      '<dt>Nota</dt><dd>Emel tidak dapat dihantar' + (r && r.emailError ? ' (' + esc(r.emailError) + ')' : '') + '. Sampaikan kata laluan ini terus kepada pengguna dan minta mereka tukar segera.</dd>';
     openModal('#mDetail');
   } catch (err) { busy(false); handleErr(err); }
 }

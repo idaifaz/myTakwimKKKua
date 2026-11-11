@@ -9,6 +9,7 @@
 
 const SHEET_AKTIVITI = 'Aktiviti';
 const SHEET_USERS = 'Users';
+const SHEET_LOGEMEL = 'LogEmel'; // rekod setiap cubaan hantar emel (untuk semakan admin)
 const AKTIVITI_HEADERS = ['ID', 'Pengisi', 'Unit', 'NamaProgram', 'TarikhMula', 'TarikhTamat',
   'PerluPeruntukan', 'KodOS', 'Amaun', 'Catatan', 'DikemasKini', 'Oleh'];
 // Aktif: 'YA' (boleh log masuk) | 'MENUNGGU' (daftar sendiri, belum diluluskan) | 'TIDAK' (dinyahaktif)
@@ -285,7 +286,10 @@ function apiUpdateUser(token, email, changes) {
   if (changes.status !== undefined) {
     if (['YA', 'TIDAK'].indexOf(changes.status) === -1) throw new Error('Status tidak sah.');
     us.getRange(u.row, 6).setValue(changes.status);
-    if (changes.status === 'YA' && u.status === 'MENUNGGU') notifyUserApproved_(u.nama, u.email);
+    if (changes.status === 'YA' && cellStr_(u.status).toUpperCase() === 'MENUNGGU') {
+      const r = notifyUserApproved_(u.nama, u.email);
+      return { emailed: r.ok, emailError: r.error };
+    }
   }
   return true;
 }
@@ -327,7 +331,7 @@ function apiResetPassword(token, email) {
     APP_URL + '\n\n' +
     'Jika anda tidak meminta reset ini, sila hubungi admin sistem.\n\n' +
     'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.');
-  return emailed ? { emailed: true } : { emailed: false, temp: temp };
+  return emailed.ok ? { emailed: true } : { emailed: false, temp: temp, emailError: emailed.error };
 }
 
 /* ===================== API: Aktiviti ===================== */
@@ -422,51 +426,91 @@ function cleanText_(s) {
   return String(s == null ? '' : s).replace(/^'/, '').replace(/[\r\n]+/g, ' ').trim().slice(0, 100);
 }
 
-function sendMail_(to, subject, body) {
+// Bersihkan nilai sel: buang apostrof pelindung, ruang kosong
+function cellStr_(v) { return String(v == null ? '' : v).replace(/^'/, '').trim(); }
+const EMAIL_RE_ = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+
+// Catat setiap cubaan emel dalam sheet LogEmel (dicipta automatik). Gagal mencatat tidak menjejaskan apa-apa.
+function logEmail_(to, subject, status, error) {
   try {
-    if (!to || MailApp.getRemainingDailyQuota() < 1) {
-      console.warn('Emel tidak dihantar (tiada penerima atau kuota habis): ' + subject);
-      return false;
-    }
-    MailApp.sendEmail({ to: to, subject: subject, body: body, name: 'myTakwimKKKua' });
-    return true;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sh = ss.getSheetByName(SHEET_LOGEMEL);
+    if (!sh) { sh = ss.insertSheet(SHEET_LOGEMEL); sh.appendRow(['Masa', 'Penerima', 'Subjek', 'Status', 'Ralat']); sh.setFrozenRows(1); }
+    sh.appendRow([nowStr_(), to, subject, status, String(error || '').slice(0, 300)]);
+    if (sh.getLastRow() > 1001) sh.deleteRows(2, sh.getLastRow() - 1001); // simpan 1000 rekod terkini
+  } catch (e) { console.error('Gagal catat LogEmel: ' + e); }
+}
+
+// Hantar SATU emel kepada SATU penerima. Pulangkan { ok, error }.
+// (Dahulu semua admin dihantar dalam satu emel; satu alamat rosak menyebabkan semua gagal.)
+function sendMail_(to, subject, body) {
+  to = cellStr_(to).toLowerCase();
+  let error = '';
+  try {
+    if (!EMAIL_RE_.test(to)) error = 'Alamat emel tidak sah: "' + to + '"';
+    else if (MailApp.getRemainingDailyQuota() < 1) error = 'Kuota emel harian akaun pemilik skrip telah habis';
+    else MailApp.sendEmail({ to: to, subject: subject, body: body, name: 'myTakwimKKKua' });
   } catch (err) {
-    console.error('Gagal hantar emel: ' + err);
-    return false;
+    error = String(err && err.message || err);
   }
+  if (error) console.error('Emel gagal ke ' + to + ': ' + error);
+  logEmail_(to, subject, error ? 'GAGAL' : 'DIHANTAR', error);
+  return { ok: !error, error: error };
 }
 
 function activeAdminEmails_() {
   const rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS).getDataRange().getValues();
   const out = [];
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][2]).toLowerCase() === 'admin' && rows[i][5] === 'YA' && rows[i][0]) out.push(String(rows[i][0]));
+    const email = cellStr_(rows[i][0]).toLowerCase();
+    if (email && cellStr_(rows[i][2]).toLowerCase() === 'admin' && cellStr_(rows[i][5]).toUpperCase() === 'YA' && out.indexOf(email) === -1) out.push(email);
   }
   return out;
 }
 
 function notifyAdminsNewRegistration_(nama, email) {
   const admins = activeAdminEmails_();
-  if (!admins.length) return;
+  if (!admins.length) { logEmail_('(tiada admin aktif)', 'Pendaftaran baharu', 'GAGAL', 'Tiada admin berstatus YA dalam sheet Users'); return; }
   nama = cleanText_(nama);
-  sendMail_(admins.join(','), '[myTakwimKKKua] Pendaftaran baharu: ' + nama,
-    'Assalamualaikum dan salam sejahtera,\n\n' +
+  const subject = '[myTakwimKKKua] Pendaftaran baharu: ' + nama;
+  const body = 'Assalamualaikum dan salam sejahtera,\n\n' +
     'Terdapat pendaftaran pengguna baharu yang menunggu kelulusan:\n\n' +
     '  Nama  : ' + nama + '\n' +
     '  Emel  : ' + cleanText_(email) + '\n' +
     '  Tarikh: ' + nowStr_() + '\n\n' +
     'Sila log masuk sebagai admin dan buka tab "Pengguna" untuk lulus atau tolak:\n' +
     APP_URL + '\n\n' +
-    'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.');
+    'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.';
+  admins.forEach(a => sendMail_(a, subject, body)); // seorang demi seorang
 }
 
 function notifyUserApproved_(nama, email) {
-  sendMail_(String(email), '[myTakwimKKKua] Akaun anda telah diluluskan',
+  return sendMail_(email, '[myTakwimKKKua] Akaun anda telah diluluskan',
     'Assalamualaikum dan salam sejahtera ' + cleanText_(nama) + ',\n\n' +
     'Akaun myTakwimKKKua anda telah diluluskan oleh admin. Anda kini boleh log masuk menggunakan emel dan kata laluan yang didaftarkan:\n\n' +
     APP_URL + '\n\n' +
     'Jika anda tidak membuat pendaftaran ini, sila abaikan emel ini atau hubungi admin sistem.\n\n' +
     'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.');
+}
+
+/**
+ * DIAGNOSTIK — jalankan dari editor Apps Script (pilih "semakEmel" > Run), kemudian lihat
+ * Execution log. Ia menunjukkan akaun pengirim, baki kuota, senarai admin yang dikesan,
+ * dan menghantar emel ujian ke akaun anda sendiri.
+ */
+function semakEmel() {
+  const me = Session.getEffectiveUser().getEmail();
+  Logger.log('Akaun pengirim (pemilik skrip): ' + me);
+  Logger.log('Baki kuota emel hari ini: ' + MailApp.getRemainingDailyQuota());
+  const rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS).getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (cellStr_(rows[i][2]).toLowerCase() !== 'admin') continue;
+    const e = cellStr_(rows[i][0]), st = cellStr_(rows[i][5]);
+    Logger.log('Admin baris ' + (i + 1) + ': "' + e + '" status="' + st + '" → ' +
+      (!EMAIL_RE_.test(e) ? 'ALAMAT TIDAK SAH' : st.toUpperCase() !== 'YA' ? 'TIDAK AKTIF (tidak akan terima emel)' : 'OK'));
+  }
+  const r = sendMail_(me, '[myTakwimKKKua] Ujian notifikasi emel', 'Notifikasi emel myTakwimKKKua berfungsi.');
+  Logger.log(r.ok ? 'Emel ujian dihantar ke ' + me + '. Semak peti masuk.' : 'Emel ujian GAGAL: ' + r.error);
 }
 
 /**
@@ -477,5 +521,5 @@ function ujiEmel() {
   const me = Session.getEffectiveUser().getEmail();
   const ok = sendMail_(me, '[myTakwimKKKua] Ujian notifikasi emel',
     'Notifikasi emel myTakwimKKKua berfungsi.\nBaki kuota emel hari ini: ' + MailApp.getRemainingDailyQuota());
-  Logger.log(ok ? 'Emel ujian dihantar ke ' + me : 'Emel ujian GAGAL — semak log.');
+  Logger.log(ok.ok ? 'Emel ujian dihantar ke ' + me : 'Emel ujian GAGAL: ' + ok.error);
 }
