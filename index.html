@@ -49,6 +49,18 @@
   .page-h h2 { margin: 0; font-size: 24px; font-weight: 700; }
   .page-h p { margin: 4px 0 16px; color: var(--muted); }
 
+  .vid-main { padding: 0; overflow: hidden; }
+  .vid-frame { position: relative; aspect-ratio: 16 / 9; background: #0f1b35; }
+  .vid-frame video { position: absolute; inset: 0; width: 100%; height: 100%; background: #0f1b35; }
+  .vid-info { padding: 14px 16px 16px; }
+  .vid-info h3 { margin: 0 0 4px; }
+  .vid-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .vid-item { display: flex; flex-direction: column; text-align: left; background: var(--card); border: 2px solid var(--line); border-radius: var(--radius); padding: 0; overflow: hidden; cursor: pointer; font: inherit; color: var(--text); }
+  .vid-item:hover { border-color: var(--teal); }
+  .vid-item.active { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-l); }
+  .vid-item img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #0f1b35; }
+  .vid-item .t { padding: 10px 12px 2px; font-weight: 700; font-size: 14px; }
+  .vid-item .d { padding: 0 12px 12px; font-size: 12px; color: var(--muted); }
   .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--line); padding: 16px; margin-bottom: 14px; }
   .card h3 { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
   .grid { display: grid; gap: 14px; }
@@ -212,6 +224,7 @@
   <symbol id="i-bar" viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4"/></symbol>
   <symbol id="i-trend" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></symbol>
   <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4z"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
 </svg>
 
@@ -227,6 +240,7 @@
     <button class="tab" data-p="kalendar"><svg class="i"><use href="#i-cal"/></svg>Kalendar Tahunan</button>
     <button class="tab" data-p="cetak"><svg class="i"><use href="#i-print"/></svg>Cetak</button>
     <button class="tab" data-p="laporan"><svg class="i"><use href="#i-file"/></svg>Laporan &amp; Eksport</button>
+    <button class="tab" data-p="panduan"><svg class="i"><use href="#i-play"/></svg>Panduan</button>
     <button class="tab" data-p="pengguna" id="tabPengguna" hidden><svg class="i"><use href="#i-users"/></svg>Pengguna<span class="badge" id="pendingBadge" hidden></span></button>
   </nav>
 </header>
@@ -334,6 +348,16 @@
   </section>
 
   <!-- LAPORAN -->
+  <!-- PANDUAN -->
+  <section class="page" id="page-panduan">
+    <div class="page-h"><h2>Panduan Penggunaan</h2><p>Video ringkas cara menggunakan myTakwimKKKua</p></div>
+    <div class="card vid-main">
+      <div class="vid-frame"><video id="vPlayer" controls playsinline preload="none"></video></div>
+      <div class="vid-info"><h3 id="vTitle"></h3><p class="hint" id="vDesc"></p></div>
+    </div>
+    <div class="vid-list" id="vList"></div>
+  </section>
+
   <section class="page" id="page-laporan">
     <div class="page-h"><h2>Laporan &amp; Eksport</h2><p>Muat turun draf takwim untuk tujuan laporan</p></div>
     <div class="card export">
@@ -576,6 +600,7 @@ function setUser(u) {
 
 /* ================= Navigasi ================= */
 function go(p) {
+  if (p !== 'panduan') { const v = $('#vPlayer'); if (v && !v.paused) v.pause(); }
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.p === p));
   $$('.page').forEach(s => s.classList.toggle('active', s.id === 'page-' + p));
   const tab = $('.tab[data-p="' + p + '"]'); if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -584,6 +609,29 @@ function go(p) {
   window.scrollTo(0, 0);
 }
 $$('.tab').forEach(t => t.addEventListener('click', () => go(t.dataset.p)));
+
+/* ================= Panduan (video) =================
+   Fail video disimpan dalam folder panduan/ di repo GitHub. Versi Apps Script
+   tidak menghidangkan fail ini, jadi guna alamat penuh GitHub Pages di sana. */
+const VID_BASE = IS_GAS ? 'https://idaifaz.github.io/myTakwimKKKua/panduan/' : 'panduan/';
+const VIDEOS = [
+  { f: 'video1-log-masuk.mp4', p: 'poster1.jpg', t: 'Video 1 · Cara Log Masuk', d: 'Log masuk, daftar akaun baharu dan apa perlu dibuat jika lupa kata laluan.', dur: '1:00' },
+  { f: 'video2-tambah-edit-aktiviti.mp4', p: 'poster2.jpg', t: 'Video 2 · Cara Tambah & Edit Aktiviti', d: 'Isi borang aktiviti, amaran tarikh bertindih, peruntukan, dan cara edit aktiviti.', dur: '1:15' },
+  { f: 'video3-cetak-takwim-unit.mp4', p: 'poster3.jpg', t: 'Video 3 · Cara Cetak Takwim Unit', d: 'Cetak takwim tahunan mengikut unit dalam format A4 dengan ruang tandatangan.', dur: '1:00' }
+];
+function pickVideo(i, autoplay) {
+  const v = VIDEOS[i], pl = $('#vPlayer');
+  if (!pl.paused) pl.pause();
+  pl.src = VID_BASE + v.f; pl.poster = VID_BASE + v.p;
+  $('#vTitle').textContent = v.t; $('#vDesc').textContent = v.d;
+  $$('#vList .vid-item').forEach((b, k) => b.classList.toggle('active', k === i));
+  if (autoplay) pl.play().catch(() => {});
+}
+$('#vList').innerHTML = VIDEOS.map((v, i) =>
+  '<button class="vid-item" type="button" data-vi="' + i + '"><img src="' + esc(VID_BASE + v.p) + '" alt="" loading="lazy">' +
+  '<span class="t">' + esc(v.t) + '</span><span class="d">' + esc(v.dur) + ' · ' + esc(v.d) + '</span></button>').join('');
+$('#vList').addEventListener('click', (e) => { const b = e.target.closest('[data-vi]'); if (b) pickVideo(+b.dataset.vi, true); });
+pickVideo(0, false);
 $$('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 
 /* ================= Data ================= */
