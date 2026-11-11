@@ -61,6 +61,19 @@
   .vid-item img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #0f1b35; }
   .vid-item .t { padding: 10px 12px 2px; font-weight: 700; font-size: 14px; }
   .vid-item .d { padding: 0 12px 12px; font-size: 12px; color: var(--muted); }
+  .vid-head { margin: 4px 0 10px; font-size: 15px; }
+  .vid-item .tx { display: block; }
+  .vid-item .now { display: none; margin: 10px 12px 0; align-self: flex-start; background: var(--teal); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+  .vid-item.active .now { display: inline-block; }
+  @media (max-width: 700px) {
+    .vid-list { grid-template-columns: 1fr; gap: 8px; }
+    .vid-item { flex-direction: row; align-items: center; }
+    .vid-item img { width: 120px; flex: none; }
+    .vid-item .t { padding: 6px 10px 2px; font-size: 13px; }
+    .vid-item .d { padding: 0 10px 6px; }
+    .vid-item .now { margin: 6px 10px 0; }
+    .vid-item .d .desc { display: none; }
+  }
   .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--line); padding: 16px; margin-bottom: 14px; }
   .card h3 { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
   .grid { display: grid; gap: 14px; }
@@ -355,6 +368,7 @@
       <div class="vid-frame"><video id="vPlayer" controls playsinline preload="none"></video></div>
       <div class="vid-info"><h3 id="vTitle"></h3><p class="hint" id="vDesc"></p></div>
     </div>
+    <h3 class="vid-head">Senarai Video</h3>
     <div class="vid-list" id="vList"></div>
   </section>
 
@@ -629,7 +643,8 @@ function pickVideo(i, autoplay) {
 }
 $('#vList').innerHTML = VIDEOS.map((v, i) =>
   '<button class="vid-item" type="button" data-vi="' + i + '"><img src="' + esc(VID_BASE + v.p) + '" alt="" loading="lazy">' +
-  '<span class="t">' + esc(v.t) + '</span><span class="d">' + esc(v.dur) + ' · ' + esc(v.d) + '</span></button>').join('');
+  '<span class="tx"><span class="now">Sedang dimainkan</span><span class="t" style="display:block">' + esc(v.t) + '</span>' +
+  '<span class="d" style="display:block">' + esc(v.dur) + '<span class="desc"> · ' + esc(v.d) + '</span></span></span></button>').join('');
 $('#vList').addEventListener('click', (e) => { const b = e.target.closest('[data-vi]'); if (b) pickVideo(+b.dataset.vi, true); });
 pickVideo(0, false);
 $$('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
