@@ -673,8 +673,13 @@ function setOptions(sel, opts, keep) {
   sel.innerHTML = opts.map(o => '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>').join('');
   if (keep && opts.some(o => String(o[0]) === prev)) sel.value = prev;
 }
+// Tahun yang dipaparkan dahulu di dashboard. Tukar setiap tahun apabila takwim baharu dirancang.
+// Kosongkan ('') untuk guna tahun semasa secara automatik.
+const TAHUN_DASHBOARD = '2027';
 function fillSelectors() {
   const ys = years(); const cy = String(new Date().getFullYear());
+  const dashY = TAHUN_DASHBOARD || cy;
+  if (ys.indexOf(+dashY) === -1) { ys.push(+dashY); ys.sort((a, b) => a - b); }
   const dataYs = S.all.map(a => a.mula.slice(0, 4)).sort();
   const defY = !dataYs.length || dataYs.includes(cy) ? cy : dataYs[dataYs.length - 1];
   const first = !$('#dYear').options.length;
@@ -686,7 +691,7 @@ function fillSelectors() {
   setOptions($('#eYear'), ys.map(y => [y, 'Tahun ' + y]), true);
   if (first) {
     $('#pYear').value = defY; $('#eYear').value = defY;
-    $('#dYear').value = cy; // dashboard sentiasa mula dengan tahun semasa
+    $('#dYear').value = dashY; // dashboard mula dengan TAHUN_DASHBOARD (atau tahun semasa)
     $('#pMonth').innerHTML = BULAN.map((b, i) => '<option value="' + pad(i + 1) + '">' + b + '</option>').join('');
     const m = S.all.find(a => a.mula.startsWith(defY));
     $('#pMonth').value = defY === cy ? pad(new Date().getMonth() + 1) : (m ? m.mula.slice(5, 7) : '01');
