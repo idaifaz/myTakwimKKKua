@@ -1251,9 +1251,10 @@ function renderUsers() {
   const pending = users.filter(u => u.status === 'MENUNGGU').length;
   $('#pendingBadge').textContent = pending; $('#pendingBadge').hidden = !pending;
   const q = $('#uSearch').value.trim().toLowerCase(), st = $('#uStatus').value;
-  const order = { MENUNGGU: 0, YA: 1, TIDAK: 2 };
+  // Susun ikut tarikh daftar terkini dahulu; akaun tanpa tarikh (cth admin pertama) di bawah
+  const dKey = u => String(u.didaftar || '');
   const rows = users.filter(u => (!st || u.status === st) && (!q || u.nama.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)))
-    .sort((a, b) => (order[a.status] - order[b.status]) || a.nama.localeCompare(b.nama));
+    .sort((a, b) => dKey(b).localeCompare(dKey(a)) || a.nama.localeCompare(b.nama));
   const me = S.user && S.user.email;
   $('#usersBody').innerHTML = rows.length ? rows.map(u => {
     const self = u.email === me, e = esc(u.email);
