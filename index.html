@@ -1296,12 +1296,17 @@ async function resetPassword(u) {
   try {
     const r = await api('apiResetPassword', S.token, u.email);
     busy(false);
-    if (r && r.emailed) return toast('Kata laluan sementara dihantar ke ' + u.email + '.');
-    // Emel gagal: tunjuk kata laluan sementara kepada admin untuk disampaikan secara manual
+    // Sentiasa tunjuk kata laluan sementara kepada admin: emel ke domain institusi
+    // kadang-kadang ditapis ke spam walaupun berjaya dihantar.
+    const ok = r && r.emailed;
+    if (ok && !r.temp) return toast('Kata laluan sementara dihantar ke ' + u.email + '.'); // Code.gs versi lama
+    const nota = ok
+      ? 'Emel telah dihantar ke ' + esc(u.email) + '. Jika pengguna tidak menerimanya (semak juga folder Spam/Junk), sampaikan kata laluan ini secara terus dan minta mereka tukar segera.'
+      : 'Emel tidak dapat dihantar' + (r && r.emailError ? ' (' + esc(r.emailError) + ')' : '') + '. Sampaikan kata laluan ini terus kepada pengguna dan minta mereka tukar segera.';
     $('#dtTitle').textContent = 'Kata laluan sementara';
     $('#dtBody').innerHTML = '<dt>Pengguna</dt><dd>' + esc(u.nama) + '</dd><dt>Emel</dt><dd>' + esc(u.email) + '</dd>' +
       '<dt>Kata laluan</dt><dd><b style="font-family:monospace;font-size:1.1em">' + esc(r && r.temp || '-') + '</b></dd>' +
-      '<dt>Nota</dt><dd>Emel tidak dapat dihantar' + (r && r.emailError ? ' (' + esc(r.emailError) + ')' : '') + '. Sampaikan kata laluan ini terus kepada pengguna dan minta mereka tukar segera.</dd>';
+      '<dt>Nota</dt><dd>' + nota + '</dd>';
     openModal('#mDetail');
   } catch (err) { busy(false); handleErr(err); }
 }

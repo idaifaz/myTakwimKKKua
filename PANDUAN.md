@@ -45,7 +45,7 @@ Admin tidak boleh menukar peranan atau menyahaktif akaun sendiri. Ini supaya sis
 ## Reset kata laluan
 - Pengguna yang lupa kata laluan perlu hubungi admin.
 - Admin buka tab **Pengguna** dan klik **Reset KL** pada akaun tersebut. Sistem jana kata laluan sementara dan hantar ke emel pengguna.
-- Jika emel gagal dihantar (cth kuota habis), kata laluan sementara dipaparkan kepada admin untuk disampaikan secara manual.
+- Kata laluan sementara juga sentiasa dipaparkan kepada admin. Jika pengguna tidak menerima emel (contohnya ditapis ke Spam/Junk oleh emel institusi) atau emel gagal dihantar, sampaikan kata laluan itu secara manual.
 - Pengguna perlu log masuk dan tukar kata laluan segera.
 
 Alternatif: admin juga boleh tambah pengguna, atau reset kata laluan pengguna sedia ada, terus dari editor Apps Script melalui fungsi `tambahPenggunaManual()`. Selepas itu, **kosongkan semula kata laluan** dalam kod.

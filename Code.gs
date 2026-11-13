@@ -310,9 +310,9 @@ function apiRejectUser(token, email) {
   return true;
 }
 
-// Admin reset kata laluan pengguna lain. Kata laluan sementara dihantar ke emel pengguna.
-// Jika emel gagal (cth kuota habis), kata laluan sementara dipulangkan kepada admin
-// supaya boleh disampaikan secara manual.
+// Admin reset kata laluan pengguna lain. Kata laluan sementara dihantar ke emel pengguna
+// DAN sentiasa dipulangkan kepada admin, kerana emel ke sesetengah domain institusi boleh
+// ditapis ke spam/kuarantin walaupun dihantar dengan berjaya.
 function apiResetPassword(token, email) {
   const s = requireAuth_(token, ['admin']);
   const u = findUser_(email);
@@ -331,7 +331,7 @@ function apiResetPassword(token, email) {
     APP_URL + '\n\n' +
     'Jika anda tidak meminta reset ini, sila hubungi admin sistem.\n\n' +
     'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.');
-  return emailed.ok ? { emailed: true } : { emailed: false, temp: temp, emailError: emailed.error };
+  return emailed.ok ? { emailed: true, temp: temp } : { emailed: false, temp: temp, emailError: emailed.error };
 }
 
 /* ===================== API: Aktiviti ===================== */
