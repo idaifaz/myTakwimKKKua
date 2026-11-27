@@ -11,7 +11,12 @@ const SHEET_AKTIVITI = 'Aktiviti';
 const SHEET_USERS = 'Users';
 const SHEET_LOGEMEL = 'LogEmel'; // rekod setiap cubaan hantar emel (untuk semakan admin)
 const AKTIVITI_HEADERS = ['ID', 'Pengisi', 'Unit', 'NamaProgram', 'TarikhMula', 'TarikhTamat',
-  'PerluPeruntukan', 'KodOS', 'Amaun', 'Catatan', 'DikemasKini', 'Oleh'];
+  'PerluPeruntukan', 'KodOS', 'Amaun', 'Catatan', 'DikemasKini', 'Oleh',
+  'EmelPemilik', 'Ingat30', 'Ingat7'];
+// EmelPemilik: emel pengguna yang MULA-MULA menambah aktiviti (tidak berubah bila diedit).
+// Ingat30 / Ingat7: tarikh mula yang peringatannya sudah dihantar. Jika tarikh mula
+// ditukar, nilainya tidak sepadan lagi, jadi peringatan baharu akan dihantar.
+const COL_PEMILIK = 13, COL_INGAT30 = 14, COL_INGAT7 = 15; // lajur M, N, O (1-based)
 // Aktif: 'YA' (boleh log masuk) | 'MENUNGGU' (daftar sendiri, belum diluluskan) | 'TIDAK' (dinyahaktif)
 const USER_HEADERS = ['Email', 'Nama', 'Role', 'Salt', 'Hash', 'Aktif', 'Didaftar'];
 const SESSION_TTL = 6 * 60 * 60; // 6 jam (had maksimum CacheService)
@@ -67,7 +72,8 @@ function setup() {
   let sh = ss.getSheetByName(SHEET_AKTIVITI);
   if (!sh) sh = ss.insertSheet(SHEET_AKTIVITI);
   if (sh.getLastRow() === 0) sh.appendRow(AKTIVITI_HEADERS);
-  sh.getRange('A:L').setNumberFormat('@'); // simpan semua sebagai teks (elak isu zon masa tarikh)
+  if (sh.getLastRow() > 0) sh.getRange(1, 1, 1, AKTIVITI_HEADERS.length).setValues([AKTIVITI_HEADERS]); // tambah lajur baharu jika ada
+  sh.getRange('A:O').setNumberFormat('@'); // simpan semua sebagai teks (elak isu zon masa tarikh)
   sh.setFrozenRows(1);
 
   let us = ss.getSheetByName(SHEET_USERS);
@@ -390,7 +396,7 @@ function apiSave(token, a) {
       return a.id;
     }
     const id = 'A' + Date.now().toString(36).toUpperCase();
-    sh.appendRow([id].concat(vals, [now, s.email]));
+    sh.appendRow([id].concat(vals, [now, s.email, s.email, '', '']));
     return id;
   } finally {
     lock.releaseLock();
@@ -522,4 +528,184 @@ function ujiEmel() {
   const ok = sendMail_(me, '[myTakwimKKKua] Ujian notifikasi emel',
     'Notifikasi emel myTakwimKKKua berfungsi.\nBaki kuota emel hari ini: ' + MailApp.getRemainingDailyQuota());
   Logger.log(ok.ok ? 'Emel ujian dihantar ke ' + me : 'Emel ujian GAGAL: ' + ok.error);
+}
+
+/* ===================== Peringatan aktiviti (30 hari & 7 hari) ===================== */
+// Trigger harian (jam 8 pagi waktu Malaysia) menghantar emel kepada pemilik aktiviti
+// 30 hari dan 7 hari sebelum tarikh mula. Julat 3 hari (28–30, 5–7) supaya peringatan
+// tetap sampai walaupun trigger terlepas sehari. Satu emel bagi setiap pemilik setiap hari.
+const PERINGATAN_ = [
+  { lajur: COL_INGAT30, dari: 28, hingga: 30, label: '30 hari' },
+  { lajur: COL_INGAT7, dari: 5, hingga: 7, label: '7 hari' }
+];
+const HARI_MS_ = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'];
+
+// 'yyyy-mm-dd' atau 'd/m/yyyy' → bilangan hari sejak epoch (UTC), atau null.
+function dayNum_(v) {
+  const t = cellStr_(v);
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/), y, mo, d;
+  if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else if ((m = t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/))) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+  else return null;
+  const ms = Date.UTC(y, mo - 1, d);
+  return isNaN(ms) ? null : Math.round(ms / 86400000);
+}
+function todayNum_() { return dayNum_(Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd')); }
+function fmtDay_(n) {
+  const dt = new Date(n * 86400000);
+  const p = x => (x < 10 ? '0' : '') + x;
+  return p(dt.getUTCDate()) + '/' + p(dt.getUTCMonth() + 1) + '/' + dt.getUTCFullYear() + ' (' + HARI_MS_[dt.getUTCDay()] + ')';
+}
+function normName_(s) { return cellStr_(s).toLowerCase().replace(/[^a-z0-9@ ]/g, ' ').replace(/\s+/g, ' ').trim(); }
+
+function usersMap_() {
+  const rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USERS).getDataRange().getValues();
+  const byEmail = {}, byName = {};
+  for (let i = 1; i < rows.length; i++) {
+    const email = cellStr_(rows[i][0]).toLowerCase();
+    if (!email) continue;
+    byEmail[email] = { nama: cellStr_(rows[i][1]), aktif: cellStr_(rows[i][5]).toUpperCase() === 'YA' };
+    const n = normName_(rows[i][1]);
+    if (n) (byName[n] = byName[n] || []).push(email);
+  }
+  return { byEmail: byEmail, byName: byName };
+}
+
+/** Dipanggil oleh trigger harian. Boleh juga dijalankan manual dari editor. */
+function hantarPeringatan() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AKTIVITI);
+    const last = sh.getLastRow();
+    if (last < 2) return;
+    const rows = sh.getRange(1, 1, last, AKTIVITI_HEADERS.length).getDisplayValues();
+    const users = usersMap_().byEmail;
+    const today = todayNum_();
+    const ikut = {}; // emel → [{...}]
+    const tanda = []; // [baris, lajur, nilai] — ditulis selepas emel berjaya dihantar
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[0]) continue;
+      const mula = dayNum_(r[4]);
+      if (mula === null) continue;
+      const hari = mula - today;
+      const pemilik = cellStr_(r[COL_PEMILIK - 1]).toLowerCase();
+      const kemaskini = dayNum_(r[10]);
+      PERINGATAN_.forEach(p => {
+        if (hari < p.dari || hari > p.hingga) return;
+        if (cellStr_(r[p.lajur - 1]) === cellStr_(r[4])) return; // sudah dihantar untuk tarikh ini
+        // Pemilik sendiri baru tambah/edit dalam 2 hari lepas: dia memang tahu, tandakan sahaja.
+        if (kemaskini !== null && today - kemaskini <= 2 && cellStr_(r[11]).toLowerCase() === pemilik) { tanda.push([i + 1, p.lajur, cellStr_(r[4])]); return; }
+        if (!pemilik || !users[pemilik] || !users[pemilik].aktif) return; // tiada pemilik / akaun tidak aktif
+        (ikut[pemilik] = ikut[pemilik] || []).push({
+          baris: i + 1, lajur: p.lajur, mulaTxt: cellStr_(r[4]), hari: hari, label: p.label,
+          unit: cleanText_(r[2]), nama: cleanText_(r[3]), mula: mula, tamat: dayNum_(r[5]),
+          perlu: cellStr_(r[6]) === 'Ya', kodOS: cleanText_(r[7]), amaun: Number(r[8]) || 0
+        });
+      });
+    }
+    let dihantar = 0;
+    Object.keys(ikut).forEach(email => {
+      const list = ikut[email].sort((a, b) => a.mula - b.mula);
+      const subject = list.length === 1
+        ? '[myTakwimKKKua] Peringatan: ' + list[0].nama + ' (' + list[0].hari + ' hari lagi)'
+        : '[myTakwimKKKua] Peringatan: ' + list.length + ' aktiviti anda akan berlangsung';
+      const blok = list.map((a, k) => {
+        let t = '  ' + (k + 1) + '. ' + a.nama + '\n' +
+          '     Unit       : ' + a.unit + '\n' +
+          '     Tarikh     : ' + fmtDay_(a.mula) + (a.tamat !== null && a.tamat > a.mula ? ' hingga ' + fmtDay_(a.tamat) : '') + '\n' +
+          '     Berbaki    : ' + a.hari + ' hari\n';
+        if (a.perlu) t += '     Peruntukan : RM ' + a.amaun.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (a.kodOS ? ' (' + a.kodOS + ')' : '') + '\n';
+        return t;
+      }).join('\n');
+      const body = 'Assalamualaikum dan salam sejahtera ' + cleanText_(users[email].nama) + ',\n\n' +
+        'Ini peringatan bahawa ' + (list.length === 1 ? 'aktiviti' : 'aktiviti-aktiviti') + ' yang anda masukkan dalam takwim kolej akan berlangsung tidak lama lagi:\n\n' +
+        blok + '\n' +
+        'Sila pastikan persediaan berjalan lancar, contohnya AJK, tempat, peralatan dan peruntukan.\n\n' +
+        'Jika tarikh telah berubah atau aktiviti dibatalkan, sila kemas kini dalam sistem:\n' + APP_URL + '\n\n' +
+        'Emel ini dijana secara automatik oleh sistem myTakwimKKKua.';
+      if (sendMail_(email, subject, body).ok) {
+        dihantar++;
+        list.forEach(a => tanda.push([a.baris, a.lajur, a.mulaTxt]));
+      }
+    });
+    tanda.forEach(t => sh.getRange(t[0], t[1]).setNumberFormat('@').setValue(t[2]));
+    console.log('Peringatan: ' + dihantar + ' emel dihantar, ' + tanda.length + ' rekod ditandakan.');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Isi EmelPemilik bagi aktiviti lama yang masih kosong:
+ *  1. Nama dalam lajur Pengisi sama dengan Nama SATU pengguna berdaftar → emel pengguna itu.
+ *  2. Jika tidak, emel dalam lajur Oleh (jika pengguna berdaftar).
+ * Yang tak dapat dikenal pasti dibiarkan kosong; admin boleh isi sendiri dalam lajur M.
+ */
+function isiPemilikLama_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AKTIVITI);
+  const last = sh.getLastRow();
+  const hasil = { nama: 0, oleh: 0, kosong: [] };
+  if (last < 2) return hasil;
+  const rows = sh.getRange(1, 1, last, AKTIVITI_HEADERS.length).getDisplayValues();
+  const u = usersMap_();
+  const today = todayNum_();
+  const col = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    let pemilik = cellStr_(r[COL_PEMILIK - 1]).toLowerCase();
+    if (r[0] && !pemilik) {
+      const calon = u.byName[normName_(r[1])];
+      const oleh = cellStr_(r[11]).toLowerCase();
+      if (calon && calon.length === 1) { pemilik = calon[0]; hasil.nama++; }
+      else if (u.byEmail[oleh]) { pemilik = oleh; hasil.oleh++; }
+      else {
+        const m = dayNum_(r[4]);
+        if (m !== null && m >= today) hasil.kosong.push('baris ' + (i + 1) + ': ' + cellStr_(r[4]) + ' | ' + cellStr_(r[3]) + ' | Pengisi: ' + (cellStr_(r[1]) || '-'));
+      }
+    }
+    col.push([pemilik]);
+  }
+  sh.getRange(2, COL_PEMILIK, col.length, 1).setNumberFormat('@').setValues(col);
+  return hasil;
+}
+
+/**
+ * JALANKAN SEKALI dari editor selepas tampal kod ini (pilih "pasangPeringatan" > Run).
+ * Ia tambah lajur baharu, isi emel pemilik bagi aktiviti lama, dan pasang trigger harian.
+ * Selamat dijalankan semula (trigger lama dibuang dahulu, data sedia ada tidak ditimpa).
+ */
+function pasangPeringatan() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AKTIVITI);
+  sh.getRange(1, 1, 1, AKTIVITI_HEADERS.length).setValues([AKTIVITI_HEADERS]);
+  sh.getRange('M:O').setNumberFormat('@');
+  const h = isiPemilikLama_();
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'hantarPeringatan') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('hantarPeringatan').timeBased().everyDays(1).atHour(8).inTimezone('Asia/Kuala_Lumpur').create();
+  Logger.log('Trigger harian dipasang: hantarPeringatan, sekitar jam 8 pagi.');
+  Logger.log('Emel pemilik diisi: ' + h.nama + ' ikut nama Pengisi, ' + h.oleh + ' ikut lajur Oleh.');
+  if (h.kosong.length) {
+    Logger.log(h.kosong.length + ' aktiviti AKAN DATANG belum ada pemilik (tiada peringatan). Isi emel dalam lajur M (EmelPemilik):');
+    h.kosong.forEach(x => Logger.log('  ' + x));
+  } else Logger.log('Semua aktiviti akan datang sudah ada pemilik.');
+}
+
+/** DIAGNOSTIK — senarai peringatan untuk 35 hari akan datang, tanpa menghantar emel. */
+function semakPeringatan() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AKTIVITI);
+  const rows = sh.getDataRange().getDisplayValues();
+  const users = usersMap_().byEmail;
+  const today = todayNum_();
+  let n = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i], m = dayNum_(r[4]);
+    if (!r[0] || m === null || m < today || m - today > 35) continue;
+    const p = cellStr_(r[COL_PEMILIK - 1]).toLowerCase();
+    const st = !p ? 'TIADA PEMILIK' : !users[p] ? 'BUKAN PENGGUNA BERDAFTAR' : !users[p].aktif ? 'AKAUN TIDAK AKTIF' : 'OK';
+    Logger.log(fmtDay_(m) + ' | ' + (m - today) + ' hari | ' + cellStr_(r[3]) + ' | ' + (p || '-') + ' | ' + st +
+      ' | 30h:' + (cellStr_(r[COL_INGAT30 - 1]) ? 'dihantar' : '-') + ' 7h:' + (cellStr_(r[COL_INGAT7 - 1]) ? 'dihantar' : '-'));
+    n++;
+  }
+  Logger.log(n + ' aktiviti dalam 35 hari akan datang. Baki kuota emel hari ini: ' + MailApp.getRemainingDailyQuota());
 }
