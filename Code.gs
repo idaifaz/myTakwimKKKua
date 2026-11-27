@@ -616,7 +616,7 @@ function hantarPeringatan() {
           '     Unit       : ' + a.unit + '\n' +
           '     Tarikh     : ' + fmtDay_(a.mula) + (a.tamat !== null && a.tamat > a.mula ? ' hingga ' + fmtDay_(a.tamat) : '') + '\n' +
           '     Berbaki    : ' + a.hari + ' hari\n';
-        if (a.perlu) t += '     Peruntukan : RM ' + a.amaun.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (a.kodOS ? ' (' + a.kodOS + ')' : '') + '\n';
+        if (a.perlu) t += '     Peruntukan : RM ' + a.amaun.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (a.kodOS ? ' (' + a.kodOS + ')' : '') + '\n';
         return t;
       }).join('\n');
       const body = 'Assalamualaikum dan salam sejahtera ' + cleanText_(users[email].nama) + ',\n\n' +

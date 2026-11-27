@@ -59,6 +59,24 @@ Emel dihantar dari akaun Gmail pemilik Apps Script. Had Gmail biasa ialah lebih 
 
 **Kali pertama selepas kemas kini `Code.gs`:** pilih fungsi `ujiEmel`, klik **Run**, kemudian benarkan kebenaran "Send email as you". Satu emel ujian akan masuk ke peti masuk anda. Lepas tu, deploy **New version** macam biasa.
 
+## Peringatan aktiviti (30 hari & 7 hari)
+Sistem hantar emel peringatan kepada **pemilik aktiviti** (pengguna yang mula-mula menambah aktiviti itu) 30 hari dan 7 hari sebelum tarikh mula. Kalau seorang staf ada beberapa aktiviti pada hari yang sama, semuanya digabung dalam satu emel.
+
+**Pasang sekali sahaja:** selepas tampal `Code.gs` baharu, pilih fungsi `pasangPeringatan`, klik **Run** dan benarkan kebenaran baharu (trigger). Fungsi ini akan:
+- tambah lajur `EmelPemilik`, `Ingat30` dan `Ingat7` dalam sheet Aktiviti;
+- isi emel pemilik bagi aktiviti lama, ikut nama dalam lajur Pengisi (jika sama dengan nama pengguna berdaftar) atau emel dalam lajur Oleh;
+- pasang trigger harian sekitar jam 8 pagi.
+
+Execution log akan senaraikan aktiviti akan datang yang **belum ada pemilik**. Isi emel staf berkenaan dalam lajur M (`EmelPemilik`) secara manual. Aktiviti tanpa pemilik, atau pemilik yang akaunnya tidak aktif, tidak akan terima peringatan.
+
+Lepas tu, deploy **New version** macam biasa.
+
+Nota:
+- Kalau tarikh mula ditukar, peringatan dihantar semula mengikut tarikh baharu.
+- Kalau pemilik sendiri baru tambah atau edit aktiviti dalam tempoh 2 hari sebelum peringatan, emel tak dihantar sebab dia memang baru tengok.
+- Untuk semak tanpa hantar emel, jalankan `semakPeringatan`. Ia senaraikan aktiviti 35 hari akan datang beserta status pemilik.
+- Untuk tukar pemilik, ubah emel dalam lajur M.
+
 ## Akses
 - Sesiapa yang ada pautan boleh **lihat** dashboard, kalendar, cetakan dan eksport. Nama pegawai pengisi hanya dipaparkan kepada pengguna yang log masuk (PDPA).
 - **Tambah, kemas kini dan padam** memerlukan log masuk. Semakan dibuat di server Google.
